@@ -18,14 +18,6 @@ from .tray import DaisyTray
 from .walker import Walker
 
 SIP_DURATION_MS = 2700
-ACTIVITY_MOOD = {
-    "meeting": "surprised",
-    "message": "surprised",
-    "browser_sprawl": "waiting",
-    "long_focus": "thinking",
-    "idle_return": "content",
-    "sitting": "thinking",
-}
 
 
 class _OllamaSignals(QObject):
@@ -240,7 +232,6 @@ class DaisyApplication:
             or not self.cfg["enabled"]
             or not self._schedule_active()
             or self.walker.busy
-            or self.bubble.isVisible()
         ):
             return
         snapshot = activity.probe()
@@ -252,7 +243,7 @@ class DaisyApplication:
         if self.cfg["mood_enabled"]:
             self._play_mood(
                 mood.MoodDecision(
-                    ACTIVITY_MOOD[observation.kind],
+                    activity.MOOD_FOR_KIND[observation.kind],
                     observation.tone,
                     observation.kind,
                 )

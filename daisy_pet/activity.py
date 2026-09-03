@@ -3,17 +3,34 @@
 from __future__ import annotations
 
 import ctypes
+import random
 import sys
 from ctypes import wintypes
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from .lines import OBSERVATION_LINES
+from .lines import pick_observation
 
 BROWSER_PROCESSES = {"chrome.exe", "msedge.exe", "firefox.exe"}
 MEETING_HINTS = ("microsoft teams", "meeting", "zoom meeting")
 MESSAGE_HINTS = ("new message", "chat |")
+MOOD_FOR_KIND = {
+    "meeting": "surprised",
+    "message": "surprised",
+    "browser_sprawl": "waiting",
+    "long_focus": "thinking",
+    "idle_return": "content",
+    "sitting": "thinking",
+}
+TONE_FOR_KIND = {
+    "meeting": "playful",
+    "message": "playful",
+    "browser_sprawl": "firm",
+    "long_focus": "gentle",
+    "idle_return": "cheerful",
+    "sitting": "gentle",
+}
 
 
 @dataclass(frozen=True)
@@ -146,31 +163,24 @@ class ActivityWatcher:
         "long_focus": timedelta(minutes=45),
         "sitting": timedelta(minutes=45),
     }
-    _MOODS = {
-        "meeting": ("surprised", "playful"),
-        "message": ("surprised", "playful"),
-        "browser_sprawl": ("waiting", "firm"),
-        "long_focus": ("thinking", "gentle"),
-        "idle_return": ("content", "cheerful"),
-        "sitting": ("thinking", "gentle"),
-    }
-
     def __init__(
         self,
         browser_window_limit: int = 6,
         focus_minutes: int = 45,
         sitting_minutes: int = 90,
         idle_minutes: int = 10,
+        rng: random.Random | None = None,
     ) -> None:
         self.browser_window_limit = browser_window_limit
         self.focus_duration = timedelta(minutes=focus_minutes)
         self.sitting_duration = timedelta(minutes=sitting_minutes)
         self.idle_duration = idle_minutes * 60
+        self.rng = rng
         self._foreground_process = ""
         self._foreground_since: datetime | None = None
         self._previous_meeting = False
         self._previous_message = False
-        self._last_non_idle: datetime | None = None
+        self._sitting_since: datetime | None = None
         self._previous_idle_seconds = 0.0
         self._last_emitted: dict[str, datetime] = {}
 
@@ -179,15 +189,12 @@ class ActivityWatcher:
         lowered = title.lower()
         return any(hint in lowered for hint in hints)
 
-    def _emit(
-        self, kind: str, now: datetime
-    ) -> Observation | None:
+    def _emit(self, kind: str, now: datetime) -> Observation | None:
         previous = self._last_emitted.get(kind)
         if previous is not None and now - previous < self._COOLDOWNS[kind]:
             return None
         self._last_emitted[kind] = now
-        _, tone = self._MOODS[kind]
-        return Observation(kind, OBSERVATION_LINES[kind][0], tone)
+        return Observation(kind, pick_observation(kind, self.rng), TONE_FOR_KIND[kind])
 
     def observe(self, snapshot: ActivitySnapshot) -> Observation | None:
         now = snapshot.at
@@ -229,13 +236,14 @@ class ActivityWatcher:
             result = self._emit("idle_return", now)
 
         if snapshot.idle_seconds >= 300:
-            self._last_non_idle = now
-        elif self._last_non_idle is None:
-            self._last_non_idle = now
+            # An idle gap of 5 minutes or more starts a new sitting stretch.
+            self._sitting_since = now
+        elif self._sitting_since is None:
+            self._sitting_since = now
         if (
             result is None
-            and self._last_non_idle is not None
-            and now - self._last_non_idle >= self.sitting_duration
+            and self._sitting_since is not None
+            and now - self._sitting_since >= self.sitting_duration
         ):
             result = self._emit("sitting", now)
 

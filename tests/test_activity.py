@@ -6,10 +6,13 @@ import daisy_pet.activity as activity
 from daisy_pet.activity import (
     ActivitySnapshot,
     ActivityWatcher,
+    MOOD_FOR_KIND,
+    TONE_FOR_KIND,
     WindowInfo,
     probe,
 )
 from daisy_pet.lines import OBSERVATION_LINES, pick_observation
+from daisy_pet.mood import POSE_FOR_MOOD
 
 
 def snapshot(
@@ -102,3 +105,20 @@ def test_observation_lines_are_deterministic_with_rng():
         assert pick_observation(kind, random.Random(4)) == pick_observation(
             kind, random.Random(4)
         )
+
+
+def test_watcher_can_select_an_alternate_observation_line():
+    class PickSecond:
+        def choice(self, values):
+            return values[1]
+
+    start = datetime(2025, 1, 1, 9)
+    observation = ActivityWatcher(rng=PickSecond()).observe(
+        snapshot(start, title="Chat | Alice")
+    )
+    assert observation.text == OBSERVATION_LINES["message"][1]
+
+
+def test_activity_kind_mappings_cover_observation_lines_and_moods():
+    assert set(OBSERVATION_LINES) == set(MOOD_FOR_KIND) == set(TONE_FOR_KIND)
+    assert all(mood in POSE_FOR_MOOD for mood in MOOD_FOR_KIND.values())
