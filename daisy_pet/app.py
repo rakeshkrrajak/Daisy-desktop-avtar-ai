@@ -210,3 +210,23 @@ class DaisyApplication:
     def set_enabled(self, enabled: bool) -> None:
         self.cfg["enabled"] = enabled
         config.save(self.cfg)
+
+    def open_settings(self) -> None:
+        dialog = SettingsDialog(self.cfg)
+        if dialog.exec() == QDialog.Accepted:
+            self.cfg.update(dialog.values())
+            config.save(self.cfg)
+            self.reminder.set_interval(self.cfg["interval_minutes"])
+            self.tray.set_interval(self.cfg["interval_minutes"])
+            self.custom_reminders = CustomReminderStore.from_config_list(
+                self.cfg["custom_reminders"]
+            )
+            self._schedule_next_ambient_walk()
+            self._apply_schedule_visibility()
+
+
+def run() -> None:
+    qt_app = QApplication([])
+    qt_app.setQuitOnLastWindowClosed(False)
+    controller = DaisyApplication(qt_app)
+    controller.qt_app.exec()

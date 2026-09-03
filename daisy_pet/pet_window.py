@@ -266,4 +266,9 @@ class PetWindow(QWidget):
         self._press_global = None
         self._press_offset = None
         self._dragged = False
-        sup
+        super().mouseReleaseEvent(event)
+
+    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.LeftButton:
+            self.double_clicked.emit()
+        super().mouseDoubleClickEvent(event)

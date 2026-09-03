@@ -181,4 +181,74 @@ def test_double_click_works_while_walking(qapp, sheet):
         Qt.KeyboardModifier.NoModifier,
     )
     pet.mouseDoubleClickEvent(event)
-    assert seen == [
+    assert seen == [True]  # double-click dismissal isn't blocked by the walk guard
+    pet.stop_walk()
+
+
+def test_right_click_emits_right_clicked_signal(qapp, sheet):
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+
+    pet = PetWindow(sheet)
+    pet.move(100, 100)
+    seen = []
+    pet.right_clicked.connect(lambda: seen.append(True))
+
+    event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        QPointF(5, 5),
+        QPointF(5, 5),
+        QPointF(5, 5),
+        Qt.MouseButton.RightButton,
+        Qt.MouseButton.RightButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    pet.mousePressEvent(event)
+    assert seen == [True]
+
+
+def test_right_click_ignored_while_walking(qapp, sheet):
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+
+    pet = PetWindow(sheet)
+    pet.move(500, 100)
+    pet.start_walk(100, pixels_per_sec=10)
+    seen = []
+    pet.right_clicked.connect(lambda: seen.append(True))
+
+    event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        QPointF(5, 5),
+        QPointF(5, 5),
+        QPointF(5, 5),
+        Qt.MouseButton.RightButton,
+        Qt.MouseButton.RightButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    pet.mousePressEvent(event)
+    assert seen == []
+    pet.stop_walk()
+
+
+def test_dragging_is_ignored_while_walking(qapp, sheet):
+    pet = PetWindow(sheet)
+    pet.move(500, 100)
+    pet.start_walk(100, pixels_per_sec=10)
+    assert pet.is_walking
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+
+    event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        QPointF(5, 5),
+        QPointF(5, 5),
+        QPointF(5, 5),
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    pet.mousePressEvent(event)
+    assert pet._press_global is None
+
+    pet.stop_walk()
