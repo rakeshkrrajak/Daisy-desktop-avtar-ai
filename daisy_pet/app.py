@@ -6,7 +6,7 @@ from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Signal
 from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import QApplication, QDialog
 
-from . import config, schedule
+from . import activity, config, schedule
 from .bubble import SpeechBubble
 from .custom_reminders import CustomReminder, CustomReminderStore
 from . import lines, mood, ollama
@@ -88,6 +88,11 @@ class DaisyApplication:
         self.ambient_timer.setSingleShot(True)
         self.ambient_timer.timeout.connect(self._on_ambient_timer)
         self._schedule_next_ambient_walk()
+        self.activity_watcher = activity.ActivityWatcher()
+        self.activity_timer = QTimer()
+        self.activity_timer.setInterval(20_000)
+        self.activity_timer.timeout.connect(self._poll_activity)
+        self.activity_timer.start()
 
     def _save_position(self, position) -> None:
         self.cfg["pos"] = [position.x(), position.y()]
@@ -220,6 +225,30 @@ class DaisyApplication:
             else:
                 self._announce_custom_reminder(item)
             return  # one reminder event per tick keeps the walk cycle exclusive
+
+    def _poll_activity(self) -> None:
+        if (
+            not self.cfg["activity_enabled"]
+            or not self.cfg["enabled"]
+            or not self._schedule_active()
+            or self.walker.busy
+        ):
+            return
+        snapshot = activity.probe()
+        if snapshot is None:
+            return
+        observation = self.activity_watcher.observe(snapshot)
+        if observation is None or self.bubble.isVisible():
+            return
+        if self.cfg["mood_enabled"]:
+            self._play_mood(
+                mood.MoodDecision(
+                    activity.MOOD_FOR_KIND[observation.kind],
+                    observation.tone,
+                    observation.kind,
+                )
+            )
+        self._show_message(observation.text)
 
     def _start_reminder_walk(
         self,
@@ -383,16 +412,23 @@ class DaisyApplication:
     def open_settings(self) -> None:
         dialog = SettingsDialog(self.cfg)
         if dialog.exec() == QDialog.Accepted:
-            self.cfg.update(dialog.values())
-            config.save(self.cfg)
-            self.reminder.set_interval(self.cfg["interval_minutes"])
-            self.tray.set_interval(self.cfg["interval_minutes"])
-            self.custom_reminders = CustomReminderStore.from_config_list(
-                self.cfg["custom_reminders"]
-            )
-            self._refresh_tray_custom_reminders()
-            self._schedule_next_ambient_walk()
-            self._apply_schedule_visibility()
+            self._apply_settings(dialog.values())
+
+    def _apply_settings(self, values: dict) -> None:
+        old_scale = self.cfg["scale"]
+        self.cfg.update(values)
+        if self.cfg["scale"] != old_scale:
+            self.pet.rescale(self.cfg["scale"])
+            self.pet.move(self.pet.clamp_position(self.pet.pos()))
+        config.save(self.cfg)
+        self.reminder.set_interval(self.cfg["interval_minutes"])
+        self.tray.set_interval(self.cfg["interval_minutes"])
+        self.custom_reminders = CustomReminderStore.from_config_list(
+            self.cfg["custom_reminders"]
+        )
+        self._refresh_tray_custom_reminders()
+        self._schedule_next_ambient_walk()
+        self._apply_schedule_visibility()
 
 
 def run() -> None:

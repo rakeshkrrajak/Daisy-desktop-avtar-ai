@@ -62,6 +62,8 @@ configure:
 
 - **Remind me to drink every** — the reminder interval in minutes, any value
   from 1 to 240 (for example, 5 minutes for quick testing).
+- **Daisy size** — choose a scale from 0.5× to 3.0×. Daisy resizes
+  immediately when you accept the settings.
 - **Enable walking animations** — turn the reminder walk-in/out and ambient
   wandering on or off. If turned off, reminders just wave in place instead.
 - **Act like drinking at** — how far across the screen (as a percentage of
@@ -127,6 +129,18 @@ as ignored.
 Install Ollama locally and run `ollama pull llama3.2`, then enable the Ollama
 option in **Daisy Settings**. It is off by default, only accepts localhost
 connections, and nothing is sent anywhere else.
+
+## Activity awareness
+
+When enabled, Daisy checks the foreground window title, foreground process
+name, local idle time, and the number of visible browser windows. She uses
+those signals to offer occasional comments when a meeting or message appears,
+you have many browser windows open, you have focused for 45 minutes, you return
+from a long idle period, or you have been sitting for 90 minutes. Checks run
+every 20 seconds and are entirely local: the information is never stored or
+sent anywhere. Turn off **Enable activity awareness** in **Daisy Settings** to
+disable these checks. Exact browser *tab* counts are not detected; Daisy only
+counts browser windows.
 
 ## Troubleshooting
 

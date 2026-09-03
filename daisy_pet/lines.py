@@ -31,6 +31,33 @@ TEMPLATES: dict[str, tuple[str, ...]] = {
     "playful": MESSAGES,
 }
 
+OBSERVATION_LINES: dict[str, tuple[str, ...]] = {
+    "meeting": (
+        "Meeting mode? Keep a sip nearby, superstar.",
+        "Daisy sees meeting mode — remember your water.",
+    ),
+    "message": (
+        "A message popped up. Take a refreshing sip too?",
+        "New message, new sip — multitasking!",
+    ),
+    "browser_sprawl": (
+        "That's a lot of browser windows. Want to close a few?",
+        "So many tabs… and one glass of water, please.",
+    ),
+    "long_focus": (
+        "You've been focused a while — stretch and sip?",
+        "Brilliant focus. Give your body a water break.",
+    ),
+    "idle_return": (
+        "Welcome back! A refreshing sip before you dive in?",
+        "Back again? Let's make it a hydrated return.",
+    ),
+    "sitting": (
+        "You've been sitting 90 minutes — stretch and sip?",
+        "Daisy says: stand up, stretch, and take a sip.",
+    ),
+}
+
 
 def pick_line(tone: str, rng: random.Random | None = None) -> str:
     chooser = rng or random
@@ -47,3 +74,10 @@ def ack_line(rng: random.Random | None = None) -> str:
             "Excellent choice. Keep glowing!",
         )
     )
+
+
+def pick_observation(
+    kind: str, rng: random.Random | None = None
+) -> str:
+    chooser = rng or random
+    return chooser.choice(OBSERVATION_LINES[kind])

@@ -22,10 +22,15 @@ def test_dialog_reflects_current_config(qapp):
         "ollama_enabled": False,
         "ollama_url": "http://127.0.0.1:11434",
         "ollama_model": "llama3.2",
+        "activity_enabled": True,
+        "scale": 1.5,
     }
     dialog = SettingsDialog(cfg)
+    dialog.scale.setValue(2.1)
+    dialog.activity_enabled.setChecked(False)
     assert dialog.values() == {
         "interval_minutes": 5,
+        "scale": 2.1,
         "walk_enabled": False,
         "walk_drink_fraction": 0.4,
         "ambient_walk_min_minutes": 4,
@@ -39,6 +44,7 @@ def test_dialog_reflects_current_config(qapp):
         "ollama_enabled": False,
         "ollama_url": "http://127.0.0.1:11434",
         "ollama_model": "llama3.2",
+        "activity_enabled": False,
     }
 
 
