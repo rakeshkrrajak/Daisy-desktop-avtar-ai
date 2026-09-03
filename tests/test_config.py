@@ -99,3 +99,89 @@ def test_default_custom_reminders_list_is_not_shared_between_loads(tmp_path):
     first["custom_reminders"].append({"id": "x"})
     second = load(path)
     assert second["custom_reminders"] == []
+
+
+def test_custom_reminders_time_of_day_mode_roundtrip(tmp_path):
+    path = tmp_path / "config.json"
+    expected = {
+        **DEFAULTS,
+        "custom_reminders": [
+            {
+                "id": "a1",
+                "text": "Afternoon check-in",
+                "mode": "time_of_day",
+                "interval_minutes": None,
+                "time_of_day": "15:00",
+                "snooze_minutes": 5,
+                "enabled": True,
+            },
+        ],
+    }
+    save(expected, path)
+    assert load(path) == expected
+
+
+def test_custom_reminders_time_of_day_malformed_entries_fall_back_to_empty(tmp_path):
+    path = tmp_path / "config.json"
+    bad_entries = [
+        [
+            {
+                "id": "a1",
+                "text": "Lunch",
+                "mode": "time_of_day",
+                "time_of_day": "25:99",
+                "enabled": True,
+            }
+        ],
+        [
+            {
+                "id": "a1",
+                "text": "Lunch",
+                "mode": "time_of_day",
+                "enabled": True,
+            }
+        ],
+        [
+            {
+                "id": "a1",
+                "text": "Lunch",
+                "mode": "whenever",
+                "interval_minutes": 10,
+                "enabled": True,
+            }
+        ],
+        [
+            {
+                "id": "a1",
+                "text": "Lunch",
+                "interval_minutes": 10,
+                "enabled": True,
+                "snooze_minutes": 0,
+            }
+        ],
+    ]
+    for entries in bad_entries:
+        path.write_text(json.dumps({"custom_reminders": entries}), encoding="utf-8")
+        assert load(path)["custom_reminders"] == []
+
+
+def test_custom_reminders_old_shape_without_mode_is_still_valid(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(
+        json.dumps(
+            {
+                "custom_reminders": [
+                    {
+                        "id": "a1",
+                        "text": "Stretch",
+                        "interval_minutes": 20,
+                        "enabled": True,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert load(path)["custom_reminders"] == [
+        {"id": "a1", "text": "Stretch", "interval_minutes": 20, "enabled": True}
+    ]

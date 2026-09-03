@@ -11,6 +11,7 @@ class DaisyTray:
         *,
         drink_now: Callable[[], None],
         snooze: Callable[[], None],
+        snooze_custom: Callable[[str], None],
         set_interval: Callable[[int], None],
         set_enabled: Callable[[bool], None],
         quit_app: Callable[[], None],
@@ -27,6 +28,10 @@ class DaisyTray:
         drink.triggered.connect(lambda: drink_now())
         snooze_action = menu.addAction("Snooze 10 minutes")
         snooze_action.triggered.connect(lambda: snooze())
+        self._snooze_custom_callback = snooze_custom
+        self.snooze_custom_menu = menu.addMenu("Snooze a reminder")
+        self.custom_snooze_actions: dict[str, object] = {}
+        self.set_custom_reminders([])
         interval_menu = menu.addMenu("Interval")
         self.interval_actions = {}
         interval_group = QActionGroup(interval_menu)
@@ -59,6 +64,23 @@ class DaisyTray:
             QSystemTrayIcon.ActivationReason.DoubleClick,
         ):
             self.menu.popup(QCursor.pos())
+
+    def set_custom_reminders(self, items: list[tuple[str, str]]) -> None:
+        """Rebuild the "Snooze a reminder" submenu. `items` is a list of
+        (reminder_id, label) pairs for the currently enabled custom reminders.
+        """
+        self.snooze_custom_menu.clear()
+        self.custom_snooze_actions = {}
+        if not items:
+            placeholder = self.snooze_custom_menu.addAction("(none yet)")
+            placeholder.setEnabled(False)
+            return
+        for reminder_id, label in items:
+            action = self.snooze_custom_menu.addAction(label)
+            action.triggered.connect(
+                lambda checked, rid=reminder_id: self._snooze_custom_callback(rid)
+            )
+            self.custom_snooze_actions[reminder_id] = action
 
     def set_interval(self, minutes: int) -> None:
         if minutes in self.interval_actions:

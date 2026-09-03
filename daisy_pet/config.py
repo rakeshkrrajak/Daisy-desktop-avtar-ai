@@ -28,18 +28,23 @@ DEFAULTS = {
 MAX_CUSTOM_REMINDER_TEXT_LENGTH = 200
 
 
+def _valid_minutes(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 1
+
+
 def _valid_custom_reminders(value: Any) -> bool:
     if not isinstance(value, list):
         return False
     for item in value:
         if not isinstance(item, dict):
             return False
-        reminder_id, text, minutes, enabled = (
+        reminder_id, text, enabled = (
             item.get("id"),
             item.get("text"),
-            item.get("interval_minutes"),
             item.get("enabled"),
         )
+        mode = item.get("mode", "interval")
+        snooze_minutes = item.get("snooze_minutes", 10)
         if not isinstance(reminder_id, str) or not reminder_id:
             return False
         if (
@@ -48,13 +53,17 @@ def _valid_custom_reminders(value: Any) -> bool:
             or len(text) > MAX_CUSTOM_REMINDER_TEXT_LENGTH
         ):
             return False
-        if (
-            not isinstance(minutes, int)
-            or isinstance(minutes, bool)
-            or minutes < 1
-        ):
-            return False
         if not isinstance(enabled, bool):
+            return False
+        if not _valid_minutes(snooze_minutes):
+            return False
+        if mode == "interval":
+            if not _valid_minutes(item.get("interval_minutes")):
+                return False
+        elif mode == "time_of_day":
+            if not schedule.is_valid_time_string(item.get("time_of_day")):
+                return False
+        else:
             return False
     return True
 

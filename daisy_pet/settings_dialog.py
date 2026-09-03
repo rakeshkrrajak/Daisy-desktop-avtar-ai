@@ -1,5 +1,6 @@
 from PySide6.QtCore import QTime, Qt
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
     QDialog,
     QDialogButtonBox,
@@ -10,13 +11,19 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QPushButton,
+    QRadioButton,
     QSpinBox,
     QTimeEdit,
     QVBoxLayout,
 )
 
 from .config import MAX_CUSTOM_REMINDER_TEXT_LENGTH
-from .custom_reminders import new_id
+from .custom_reminders import (
+    DEFAULT_SNOOZE_MINUTES,
+    MODE_INTERVAL,
+    MODE_TIME_OF_DAY,
+    new_id,
+)
 
 
 def _to_qtime(value: str) -> QTime:
@@ -24,8 +31,16 @@ def _to_qtime(value: str) -> QTime:
     return QTime(int(hours), int(minutes))
 
 
+def _summary_text(data: dict) -> str:
+    if data.get("mode", MODE_INTERVAL) == MODE_TIME_OF_DAY and data.get("time_of_day"):
+        return f"{data['text']} — daily at {data['time_of_day']}"
+    return f"{data['text']} — every {data.get('interval_minutes', '?')} min"
+
+
 class AddCustomReminderDialog(QDialog):
-    """Small popup for typing a new custom reminder's text and interval."""
+    """Small popup for defining a new custom reminder: its text, when it
+    fires (repeating interval or a fixed clock time), and its snooze length.
+    """
 
     def __init__(self, parent: QDialog | None = None) -> None:
         super().__init__(parent)
@@ -36,14 +51,33 @@ class AddCustomReminderDialog(QDialog):
         self.text_input.setPlaceholderText("e.g. Stretch, Stand up, Eat lunch")
         self.text_input.setMaxLength(MAX_CUSTOM_REMINDER_TEXT_LENGTH)
 
+        self.interval_radio = QRadioButton("Repeat every")
+        self.time_of_day_radio = QRadioButton("At a specific time")
+        self.interval_radio.setChecked(True)
+        self.mode_group = QButtonGroup(self)
+        self.mode_group.addButton(self.interval_radio)
+        self.mode_group.addButton(self.time_of_day_radio)
+        self.interval_radio.toggled.connect(self._on_mode_changed)
+
         self.interval_minutes = QSpinBox()
         self.interval_minutes.setRange(1, 1440)
         self.interval_minutes.setSuffix(" min")
         self.interval_minutes.setValue(30)
 
+        self.time_of_day = QTimeEdit()
+        self.time_of_day.setDisplayFormat("HH:mm")
+        self.time_of_day.setTime(QTime(15, 0))
+
+        self.snooze_minutes = QSpinBox()
+        self.snooze_minutes.setRange(1, 240)
+        self.snooze_minutes.setSuffix(" min")
+        self.snooze_minutes.setValue(DEFAULT_SNOOZE_MINUTES)
+
         form = QFormLayout()
         form.addRow("Reminder text", self.text_input)
-        form.addRow("Every", self.interval_minutes)
+        form.addRow(self.interval_radio, self.interval_minutes)
+        form.addRow(self.time_of_day_radio, self.time_of_day)
+        form.addRow("Snooze by", self.snooze_minutes)
 
         self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         self.buttons.accepted.connect(self._on_accept)
@@ -53,17 +87,33 @@ class AddCustomReminderDialog(QDialog):
         layout.addLayout(form)
         layout.addWidget(self.buttons)
 
+        self._on_mode_changed()
+
+    def _on_mode_changed(self) -> None:
+        use_interval = self.interval_radio.isChecked()
+        self.interval_minutes.setEnabled(use_interval)
+        self.time_of_day.setEnabled(not use_interval)
+
     def _on_accept(self) -> None:
         if self.text_input.text().strip():
             self.accept()
 
     def result_dict(self) -> dict:
-        return {
+        data = {
             "id": new_id(),
             "text": self.text_input.text().strip(),
-            "interval_minutes": self.interval_minutes.value(),
+            "snooze_minutes": self.snooze_minutes.value(),
             "enabled": True,
         }
+        if self.interval_radio.isChecked():
+            data["mode"] = MODE_INTERVAL
+            data["interval_minutes"] = self.interval_minutes.value()
+            data["time_of_day"] = None
+        else:
+            data["mode"] = MODE_TIME_OF_DAY
+            data["time_of_day"] = self.time_of_day.time().toString("HH:mm")
+            data["interval_minutes"] = None
+        return data
 
 
 class SettingsDialog(QDialog):
@@ -151,7 +201,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(buttons)
 
     def _add_list_item(self, data: dict) -> None:
-        item = QListWidgetItem(f"{data['text']} — every {data['interval_minutes']} min")
+        item = QListWidgetItem(_summary_text(data))
         item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
         item.setCheckState(Qt.Checked if data.get("enabled", True) else Qt.Unchecked)
         item.setData(Qt.UserRole, dict(data))

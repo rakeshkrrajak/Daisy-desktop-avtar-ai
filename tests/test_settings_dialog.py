@@ -48,10 +48,19 @@ def test_dialog_preloads_existing_custom_reminders(qapp):
         "custom_reminders": [
             {"id": "a1", "text": "Stretch", "interval_minutes": 45, "enabled": True},
             {"id": "b2", "text": "Stand up", "interval_minutes": 20, "enabled": False},
+            {
+                "id": "c3",
+                "text": "Lunch",
+                "mode": "time_of_day",
+                "time_of_day": "13:00",
+                "snooze_minutes": 5,
+                "enabled": True,
+            },
         ],
     }
     dialog = SettingsDialog(cfg)
-    assert dialog.custom_list.count() == 2
+    assert dialog.custom_list.count() == 3
+    assert dialog.custom_list.item(2).text() == "Lunch — daily at 13:00"
     assert dialog.values()["custom_reminders"] == cfg["custom_reminders"]
 
 
@@ -65,7 +74,10 @@ def test_add_and_remove_custom_reminder_via_dialog(qapp):
     add_dialog.interval_minutes.setValue(90)
     data = add_dialog.result_dict()
     assert data["text"] == "Eat lunch"
+    assert data["mode"] == "interval"
     assert data["interval_minutes"] == 90
+    assert data["time_of_day"] is None
+    assert data["snooze_minutes"] == 10
     assert data["enabled"] is True
     assert data["id"]
 
@@ -79,6 +91,32 @@ def test_add_and_remove_custom_reminder_via_dialog(qapp):
     dialog._on_remove_selected()
     assert dialog.custom_list.count() == 0
     assert dialog.values()["custom_reminders"] == []
+
+
+def test_add_dialog_time_of_day_mode(qapp):
+    from PySide6.QtCore import QTime
+
+    add_dialog = AddCustomReminderDialog()
+    add_dialog.text_input.setText("Afternoon check-in")
+    add_dialog.time_of_day_radio.setChecked(True)
+    add_dialog.time_of_day.setTime(QTime(15, 30))
+    add_dialog.snooze_minutes.setValue(5)
+
+    assert not add_dialog.interval_minutes.isEnabled()
+    assert add_dialog.time_of_day.isEnabled()
+
+    data = add_dialog.result_dict()
+    assert data["mode"] == "time_of_day"
+    assert data["time_of_day"] == "15:30"
+    assert data["interval_minutes"] is None
+    assert data["snooze_minutes"] == 5
+
+
+def test_add_dialog_defaults_to_interval_mode_enabled_fields(qapp):
+    add_dialog = AddCustomReminderDialog()
+    assert add_dialog.interval_radio.isChecked()
+    assert add_dialog.interval_minutes.isEnabled()
+    assert not add_dialog.time_of_day.isEnabled()
 
 
 def test_unchecking_custom_reminder_item_disables_it(qapp):

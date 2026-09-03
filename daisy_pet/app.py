@@ -38,6 +38,7 @@ class DaisyApplication:
             self.sprites.frames("idle")[0],
             drink_now=self.drink_now,
             snooze=self.snooze,
+            snooze_custom=self.snooze_custom,
             set_interval=self.set_interval,
             set_enabled=self.set_enabled,
             quit_app=self.qt_app.quit,
@@ -45,6 +46,7 @@ class DaisyApplication:
             interval=self.reminder.interval_minutes,
             enabled=self.cfg["enabled"],
         )
+        self._refresh_tray_custom_reminders()
         self._schedule_hidden = False
         self.tray.show()
         if self._schedule_active():
@@ -201,6 +203,21 @@ class DaisyApplication:
         self.reminder.snooze(10)
         self._show_message("Snoozed for 10 minutes. Daisy will remind you!")
 
+    def snooze_custom(self, reminder_id: str) -> None:
+        item = self.custom_reminders.find(reminder_id)
+        if item is None:
+            return
+        item.snooze()
+        self._show_message(f'Snoozed "{item.text}" for {item.snooze_minutes} min.')
+
+    def _refresh_tray_custom_reminders(self) -> None:
+        items = [
+            (item.reminder_id, item.summary())
+            for item in self.custom_reminders.items
+            if item.enabled
+        ]
+        self.tray.set_custom_reminders(items)
+
     def set_interval(self, minutes: int) -> None:
         self.reminder.set_interval(minutes)
         self.cfg["interval_minutes"] = minutes
@@ -221,6 +238,7 @@ class DaisyApplication:
             self.custom_reminders = CustomReminderStore.from_config_list(
                 self.cfg["custom_reminders"]
             )
+            self._refresh_tray_custom_reminders()
             self._schedule_next_ambient_walk()
             self._apply_schedule_visibility()
 
