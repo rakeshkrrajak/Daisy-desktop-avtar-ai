@@ -23,6 +23,12 @@ STATES: dict[str, tuple[int, int]] = {
 # with no files present, callers should fall back to a built-in STATES pose.
 CUSTOM_STATE_DIRS: dict[str, str] = {
     "drinking": "drinking",
+    "happy": "happy",
+    "sleepy": "sleepy",
+    "thinking": "thinking",
+    "disappointed": "disappointed",
+    "surprised": "surprised",
+    "judging": "judging",
 }
 CUSTOM_IMAGE_SUFFIXES = (".png", ".webp")
 
@@ -87,7 +93,7 @@ class SpriteSheet:
                 self._frames[state] = self._load_custom_frames(custom_dir)
                 return self._frames[state]
             if state not in STATES:
-                valid = ", ".join(STATES)
+                valid = ", ".join((*STATES, *CUSTOM_STATE_DIRS))
                 raise ValueError(f"unknown state {state!r}; valid names: {valid}")
             row, count = STATES[state]
             width, height = self.frame_size

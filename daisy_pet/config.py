@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from .ollama import is_local_url
 from . import schedule
 
 
@@ -23,6 +24,10 @@ DEFAULTS = {
     "schedule_start": "08:00",
     "schedule_end": "22:00",
     "custom_reminders": [],
+    "mood_enabled": True,
+    "ollama_enabled": False,
+    "ollama_url": "http://127.0.0.1:11434",
+    "ollama_model": "llama3.2",
 }
 
 MAX_CUSTOM_REMINDER_TEXT_LENGTH = 200
@@ -76,6 +81,10 @@ def config_path() -> Path:
     return Path.home() / ".denim-daisy" / "config.json"
 
 
+def mood_state_path() -> Path:
+    return config_path().with_name("mood_state.json")
+
+
 def _valid_value(key: str, value: Any) -> bool:
     if key in {"interval_minutes", "bubble_seconds"}:
         return isinstance(value, int) and not isinstance(value, bool) and value >= 1
@@ -97,8 +106,18 @@ def _valid_value(key: str, value: Any) -> bool:
                 )
             )
         )
-    if key in {"enabled", "walk_enabled", "schedule_enabled"}:
+    if key in {
+        "enabled",
+        "walk_enabled",
+        "schedule_enabled",
+        "mood_enabled",
+        "ollama_enabled",
+    }:
         return isinstance(value, bool)
+    if key == "ollama_url":
+        return isinstance(value, str) and is_local_url(value)
+    if key == "ollama_model":
+        return isinstance(value, str) and bool(value.strip()) and len(value) <= 80
     if key in {
         "ambient_walk_min_minutes",
         "ambient_walk_max_minutes",

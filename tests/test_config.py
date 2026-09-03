@@ -165,6 +165,39 @@ def test_custom_reminders_time_of_day_malformed_entries_fall_back_to_empty(tmp_p
         assert load(path)["custom_reminders"] == []
 
 
+def test_mood_and_ollama_defaults_and_validation(tmp_path):
+    path = tmp_path / "config.json"
+    assert load(path)["mood_enabled"] is True
+    assert load(path)["ollama_enabled"] is False
+    assert load(path)["ollama_url"] == "http://127.0.0.1:11434"
+    assert load(path)["ollama_model"] == "llama3.2"
+    path.write_text(
+        json.dumps(
+            {
+                "mood_enabled": "yes",
+                "ollama_enabled": "yes",
+                "ollama_url": "https://127.0.0.1:11434",
+                "ollama_model": "",
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg = load(path)
+    assert cfg["mood_enabled"] is True
+    assert cfg["ollama_enabled"] is False
+    assert cfg["ollama_url"] == DEFAULTS["ollama_url"]
+    assert cfg["ollama_model"] == DEFAULTS["ollama_model"]
+
+
+def test_non_local_ollama_url_is_rejected(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(
+        json.dumps({"ollama_url": "http://example.com:11434"}),
+        encoding="utf-8",
+    )
+    assert load(path)["ollama_url"] == DEFAULTS["ollama_url"]
+
+
 def test_custom_reminders_old_shape_without_mode_is_still_valid(tmp_path):
     path = tmp_path / "config.json"
     path.write_text(

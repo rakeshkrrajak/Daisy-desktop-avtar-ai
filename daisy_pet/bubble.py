@@ -1,9 +1,12 @@
-from PySide6.QtCore import QRect, Qt, QTimer
+from PySide6.QtCore import QRect, Qt, QTimer, Signal
 from PySide6.QtGui import QFont, QGuiApplication, QPainter
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 
 class SpeechBubble(QWidget):
+    acknowledged = Signal()
+    ignored = Signal()
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowFlags(
@@ -14,6 +17,7 @@ class SpeechBubble(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground)
         self._label = QLabel(self)
         self._label.setWordWrap(True)
+        self._label.setAttribute(Qt.WA_TransparentForMouseEvents)
         self._label.setMaximumWidth(236)
         self._label.setStyleSheet("color: #17202a; background: transparent;")
         self._label.setFont(QFont("Segoe UI", 10))
@@ -21,8 +25,16 @@ class SpeechBubble(QWidget):
         layout.setContentsMargins(12, 9, 12, 9)
         layout.addWidget(self._label)
         self._hide_timer: QTimer | None = None
+        self._actionable = False
+        self._clicked = False
 
-    def show_message(self, text: str, near: QRect, seconds: int) -> None:
+    def show_message(
+        self, text: str, near: QRect, seconds: int, actionable: bool = False
+    ) -> None:
+        self._actionable = actionable
+        self._clicked = False
+        if actionable:
+            text = f"{text}\nClick me once you've had a sip"
         self._label.setText(text)
         self._label.adjustSize()
         self.adjustSize()
@@ -43,8 +55,20 @@ class SpeechBubble(QWidget):
             self._hide_timer.stop()
         self._hide_timer = QTimer(self)
         self._hide_timer.setSingleShot(True)
-        self._hide_timer.timeout.connect(self.hide)
+        self._hide_timer.timeout.connect(self._expire)
         self._hide_timer.start(max(1, seconds) * 1000)
+
+    def set_message_text(self, text: str) -> None:
+        if self._actionable:
+            text = f"{text}\nClick me once you've had a sip"
+        self._label.setText(text)
+        self._label.adjustSize()
+        self.adjustSize()
+
+    def _expire(self) -> None:
+        if self._actionable and not self._clicked:
+            self.ignored.emit()
+        self.hide()
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
@@ -54,5 +78,8 @@ class SpeechBubble(QWidget):
         painter.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), 10, 10)
 
     def mousePressEvent(self, event) -> None:
+        if self._actionable and not self._clicked:
+            self._clicked = True
+            self.acknowledged.emit()
         self.hide()
         super().mousePressEvent(event)

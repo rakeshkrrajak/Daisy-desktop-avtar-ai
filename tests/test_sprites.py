@@ -32,6 +32,12 @@ def test_unknown_state_raises_value_error(sheet):
         sheet.frames("not-a-state")
 
 
+def test_new_custom_states_load_from_disk(sheet):
+    for state in ("happy", "sleepy", "thinking", "disappointed", "surprised", "judging"):
+        assert sheet.has_custom_state(state)
+        assert len(sheet.frames(state)) == 1
+
+
 def test_drinking_custom_state_asset_is_loaded_with_transparency(sheet):
     assert sheet.has_custom_state("drinking")
     frames = sheet.frames("drinking")

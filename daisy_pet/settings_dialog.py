@@ -162,6 +162,13 @@ class SettingsDialog(QDialog):
         self.schedule_end.setDisplayFormat("HH:mm")
         self.schedule_end.setTime(_to_qtime(cfg["schedule_end"]))
 
+        self.mood_enabled = QCheckBox("Enable mood expressions")
+        self.mood_enabled.setChecked(cfg["mood_enabled"])
+        self.ollama_enabled = QCheckBox("Enable optional local Ollama lines")
+        self.ollama_enabled.setChecked(cfg["ollama_enabled"])
+        self.ollama_url = QLineEdit(cfg["ollama_url"])
+        self.ollama_model = QLineEdit(cfg["ollama_model"])
+
         form = QFormLayout()
         form.addRow("Remind me to drink every", self.interval_minutes)
         form.addRow(self.walk_enabled)
@@ -172,6 +179,10 @@ class SettingsDialog(QDialog):
         form.addRow(self.schedule_enabled)
         form.addRow("Active from", self.schedule_start)
         form.addRow("Active until", self.schedule_end)
+        form.addRow(self.mood_enabled)
+        form.addRow(self.ollama_enabled)
+        form.addRow("Ollama URL", self.ollama_url)
+        form.addRow("Ollama model", self.ollama_model)
 
         self.custom_list = QListWidget()
         for item in cfg["custom_reminders"]:
@@ -239,4 +250,8 @@ class SettingsDialog(QDialog):
             "schedule_start": self.schedule_start.time().toString("HH:mm"),
             "schedule_end": self.schedule_end.time().toString("HH:mm"),
             "custom_reminders": self._custom_reminders(),
+            "mood_enabled": self.mood_enabled.isChecked(),
+            "ollama_enabled": self.ollama_enabled.isChecked(),
+            "ollama_url": self.ollama_url.text().strip(),
+            "ollama_model": self.ollama_model.text().strip(),
         }
