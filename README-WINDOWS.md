@@ -25,7 +25,10 @@ runs locally and makes no network calls.
 The pet floats above other windows. Drag it with the left mouse button. A
 single click shows the approximate time until the next reminder. A
 **right-click on Daisy herself** also opens the same menu as the tray icon
-(handy if you can't find the tray icon — see note below).
+(handy if you can't find the tray icon — see note below). A **double-click
+on Daisy** instantly dismisses her — whatever she's doing (idle, walking,
+mid-reminder) — and she reappears at the next reminder or ambient wander
+like normal.
 
 Every so often Daisy wanders across the screen along the top of your
 taskbar just for fun. When a water reminder is due (on your configured
@@ -45,10 +48,12 @@ icon (or a right-click on Daisy herself).
 > Settings → Personalization → Taskbar → "Select which icons appear on the
 > taskbar" to always show her).
 
-The tray menu provides **Drink now**, **Snooze 10 minutes**, an
-**Interval** submenu with 15, 30, 45, and 60 minutes, **Reminders enabled**
-to turn scheduled reminders on or off, and **Daisy Settings...** to
-configure walking and active hours. **Quit** exits the app.
+The tray menu provides **Drink now**, **Snooze 10 minutes** (for the water
+reminder), a **Snooze a reminder** submenu (for your custom reminders — see
+below), an **Interval** submenu with 15, 30, 45, and 60 minutes,
+**Reminders enabled** to turn scheduled reminders on or off, and
+**Daisy Settings...** to configure walking and active hours. **Quit** exits
+the app.
 
 ### Daisy Settings
 
@@ -69,12 +74,19 @@ configure:
   reminders) are hidden outside that window. Supports overnight ranges
   (e.g. 22:00 to 06:00).
 - **Custom reminders** — a list where you can **Add...** your own reminders
-  (any text, like "Stretch", "Stand up", "Eat lunch"), each with its own
-  interval in minutes. Check/uncheck an entry to enable or disable it, or
-  select one and click **Remove selected** to delete it. Custom reminders
-  use the same walk-in cinematic as the water reminder (waving instead of
-  drinking) and never overlap with it or each other — only one reminder
-  plays out at a time, and others just wait their turn.
+  (any text, like "Stretch", "Stand up", "Eat lunch"). Each one fires either:
+  - **Repeat every** N minutes (like the water reminder), or
+  - **At a specific time** — pick an exact clock time (e.g. 15:00) and it
+    fires once a day at that time, then automatically rolls over to the
+    same time tomorrow.
+
+  Each reminder also has its own **Snooze by** duration (in minutes), used
+  when you snooze it from the tray's **Snooze a reminder** submenu.
+  Check/uncheck an entry in the list to enable or disable it, or select one
+  and click **Remove selected** to delete it. Custom reminders use the same
+  walk-in cinematic as the water reminder (waving instead of drinking) and
+  never overlap with it or each other — only one reminder plays out at a
+  time, and others just wait their turn.
 
 Daisy's "drinking" pose (`daisy_pet/assets/drinking/01.png`) is a dedicated
 illustration of her holding a water bottle, layered on top of the base
