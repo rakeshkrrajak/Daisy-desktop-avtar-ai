@@ -18,6 +18,10 @@ def test_dialog_reflects_current_config(qapp):
         "schedule_start": "09:15",
         "schedule_end": "17:45",
         "custom_reminders": [],
+        "mood_enabled": True,
+        "ollama_enabled": False,
+        "ollama_url": "http://127.0.0.1:11434",
+        "ollama_model": "llama3.2",
     }
     dialog = SettingsDialog(cfg)
     assert dialog.values() == {
@@ -31,6 +35,10 @@ def test_dialog_reflects_current_config(qapp):
         "schedule_start": "09:15",
         "schedule_end": "17:45",
         "custom_reminders": [],
+        "mood_enabled": True,
+        "ollama_enabled": False,
+        "ollama_url": "http://127.0.0.1:11434",
+        "ollama_model": "llama3.2",
     }
 
 

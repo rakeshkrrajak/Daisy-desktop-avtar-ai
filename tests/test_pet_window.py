@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from daisy_pet.pet_window import PetWindow
+from daisy_pet.pet_window import FRAME_MS
 from daisy_pet.sprites import SpriteSheet
 
 
@@ -20,6 +21,21 @@ def test_play_with_loops_none_repeats_forever(qapp, sheet):
     for _ in range(3 * len(pet._frames)):
         pet._advance()
     assert pet.state == "running-left"
+
+
+def test_single_frame_custom_state_returns_to_then(qapp, sheet):
+    pet = PetWindow(sheet)
+    pet.play("happy", loops=2, then="idle")
+    assert pet.state == "happy"
+    assert pet._single_frame_timer.isActive()
+    pet._finish_single_frame()
+    assert pet.state == "idle"
+
+
+def test_drinking_uses_slow_frame_interval(qapp, sheet):
+    pet = PetWindow(sheet)
+    pet.play("drinking", loops=None)
+    assert pet._timer.interval() == FRAME_MS["drinking"]
 
 
 def test_start_walk_picks_direction_from_target(qapp, sheet):

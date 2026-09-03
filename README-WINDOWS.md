@@ -112,6 +112,22 @@ Settings are saved immediately to
 Create a shortcut to `run_daisy.bat` in the Windows Startup folder. To open
 that folder, press `Win+R`, enter `shell:startup`, and press Enter.
 
+## Mood expressions
+
+With moods enabled, Daisy uses expression poses based on what is happening:
+happy after you acknowledge a sip, thinking after a snooze, disappointed after
+repeated snoozes, waiting after repeated ignored reminders, sleepy late at
+night, content on her first appearance of the day, surprised after dragging
+her, and neutral otherwise. Reminder bubbles invite you to click after
+drinking; clicking acknowledges the sip, while letting the bubble expire counts
+as ignored.
+
+## Optional: local AI lines with Ollama
+
+Install Ollama locally and run `ollama pull llama3.2`, then enable the Ollama
+option in **Daisy Settings**. It is off by default, only accepts localhost
+connections, and nothing is sent anywhere else.
+
 ## Troubleshooting
 
 On a high-DPI display, Daisy may look too small or oversized. Edit `scale` in

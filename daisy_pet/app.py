@@ -1,19 +1,39 @@
 import random
+from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Signal
 from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import QApplication, QDialog
 
 from . import config, schedule
 from .bubble import SpeechBubble
 from .custom_reminders import CustomReminder, CustomReminderStore
+from . import lines, mood, ollama
 from .pet_window import PetWindow
 from .reminder import WaterReminder, pick_message
 from .settings_dialog import SettingsDialog
 from .sprites import SpriteSheet
 from .tray import DaisyTray
 from .walker import Walker
+
+
+class _OllamaSignals(QObject):
+    finished = Signal(str)
+
+
+class _OllamaWorker(QRunnable):
+    def __init__(self, prompt: str, model: str, url: str) -> None:
+        super().__init__()
+        self.prompt = prompt
+        self.model = model
+        self.url = url
+        self.signals = _OllamaSignals()
+
+    def run(self) -> None:
+        result = ollama.generate_line(self.prompt, self.model, self.url)
+        if result:
+            self.signals.finished.emit(result)
 
 
 class DaisyApplication:
@@ -26,12 +46,17 @@ class DaisyApplication:
         self.pet.place_initial(self.cfg["pos"])
         self.bubble = SpeechBubble()
         self.reminder = WaterReminder(self.cfg["interval_minutes"])
+        self.mood_state = mood.load()
+        self._last_drag_mood_at = 0.0
+        self._bubble_generation = 0
         self.custom_reminders = CustomReminderStore.from_config_list(
             self.cfg["custom_reminders"]
         )
         self.walker = Walker(self.pet)
-        self.pet.moved.connect(self._save_position)
+        self.pet.moved.connect(self._on_pet_moved)
         self.pet.clicked.connect(self._show_next_reminder)
+        self.bubble.acknowledged.connect(self._on_bubble_acknowledged)
+        self.bubble.ignored.connect(self._on_bubble_ignored)
         self.pet.right_clicked.connect(self._open_pet_menu)
         self.pet.double_clicked.connect(self._vanish_now)
         self.tray = DaisyTray(
@@ -66,8 +91,67 @@ class DaisyApplication:
         self.cfg["pos"] = [position.x(), position.y()]
         config.save(self.cfg)
 
-    def _show_message(self, text: str) -> None:
-        self.bubble.show_message(text, self.pet.geometry(), self.cfg["bubble_seconds"])
+    def _on_pet_moved(self, position) -> None:
+        self._save_position(position)
+        now = datetime.now().timestamp()
+        if self.cfg["mood_enabled"] and now - self._last_drag_mood_at >= 3:
+            self._last_drag_mood_at = now
+            self._play_mood(mood.decide(self._signals(just_dragged=True)))
+
+    def _show_message(self, text: str, actionable: bool = False) -> None:
+        self._bubble_generation += 1
+        self.bubble.show_message(
+            text,
+            self.pet.geometry(),
+            self.cfg["bubble_seconds"],
+            actionable=actionable,
+        )
+
+    def _signals(self, **flags: bool) -> mood.MoodSignals:
+        minutes_since_ack = None
+        if self.mood_state.last_ack_iso:
+            try:
+                minutes_since_ack = (
+                    datetime.now() - datetime.fromisoformat(
+                        self.mood_state.last_ack_iso
+                    )
+                ).total_seconds() / 60
+            except ValueError:
+                minutes_since_ack = None
+        first = self.mood_state.mark_seen(datetime.now().date())
+        mood.save(self.mood_state)
+        return mood.MoodSignals(
+            hour=datetime.now().hour,
+            minutes_since_ack=minutes_since_ack,
+            snooze_streak=self.mood_state.snooze_streak,
+            ignored_streak=self.mood_state.ignored_streak,
+            first_appearance_today=first,
+            **flags,
+        )
+
+    def _play_mood(self, decision: mood.MoodDecision) -> None:
+        preferred, fallback = mood.POSE_FOR_MOOD[decision.mood]
+        state = preferred if self.sprites.has_custom_state(preferred) else fallback
+        self.pet.play(state, loops=1, then="idle")
+
+    def _show_reminder_line(self, line: str, tone: str, actionable: bool = True) -> None:
+        self._show_message(line, actionable=actionable)
+        if not self.cfg["ollama_enabled"]:
+            return
+        generation = self._bubble_generation
+        worker = _OllamaWorker(
+            ollama.build_prompt(tone, 0),
+            self.cfg["ollama_model"],
+            self.cfg["ollama_url"],
+        )
+        worker.signals.finished.connect(
+            lambda result, token=generation: self._replace_ollama_line(result, token)
+        )
+        QThreadPool.globalInstance().start(worker)
+
+    def _replace_ollama_line(self, text: str, generation: int) -> None:
+        if generation == self._bubble_generation and self.bubble.isVisible():
+            self.bubble.set_message_text(text)
 
     def _open_pet_menu(self) -> None:
         self.tray.menu.popup(QCursor.pos())
@@ -79,7 +163,13 @@ class DaisyApplication:
             )
             return
         minutes = max(0, round(self.reminder.seconds_remaining / 60))
-        self._show_message(f"Next sip in ~{minutes} min")
+        if self.cfg["mood_enabled"]:
+            decision = mood.decide(self._signals())
+            self._show_message(
+                f"Next sip in ~{minutes} min — {lines.pick_line(decision.tone)}"
+            )
+        else:
+            self._show_message(f"Next sip in ~{minutes} min")
 
     def _vanish_now(self) -> None:
         """Double-click Daisy to instantly dismiss her, whatever she's doing —
@@ -129,7 +219,13 @@ class DaisyApplication:
                 self._announce_custom_reminder(item)
             return  # one reminder event per tick keeps the walk cycle exclusive
 
-    def _start_reminder_walk(self, message: str, act_it_out) -> None:
+    def _start_reminder_walk(
+        self,
+        message: str,
+        act_it_out,
+        actionable: bool = False,
+        tone: str | None = None,
+    ) -> None:
         """Shared walk-in/pause/walk-out cinematic for any reminder kind.
 
         `act_it_out` plays whatever pose fits (drinking, waving, ...) and
@@ -141,7 +237,10 @@ class DaisyApplication:
 
         def at_point() -> None:
             act_it_out()
-            self._show_message(message)
+            if tone is None:
+                self._show_message(message, actionable=actionable)
+            else:
+                self._show_reminder_line(message, tone, actionable)
             QTimer.singleShot(
                 max(1, self.cfg["bubble_seconds"]) * 1000, self._finish_reminder_walk
             )
@@ -154,11 +253,27 @@ class DaisyApplication:
         self.walker.reminder_walk_out(self.cfg["walk_crossing_seconds"], self.pet.hide)
 
     def _start_water_reminder_walk(self) -> None:
+        decision = (
+            mood.decide(self._signals())
+            if self.cfg["mood_enabled"]
+            else None
+        )
+
         def act_it_out() -> None:
             self.pet.start_sip()
             self.reminder.mark_fired()
 
-        self._start_reminder_walk(f"💧 {pick_message()}", act_it_out)
+        if decision is None:
+            line = f"💧 {pick_message()}"
+        else:
+            self._play_mood(decision)
+            line = lines.pick_line(decision.tone)
+        self._start_reminder_walk(
+            line,
+            act_it_out,
+            actionable=self.cfg["mood_enabled"],
+            tone=decision.tone if decision is not None else None,
+        )
 
     def _start_custom_reminder_walk(self, item: CustomReminder) -> None:
         def act_it_out() -> None:
@@ -194,14 +309,43 @@ class DaisyApplication:
     def drink_now(self, mark: bool = True) -> None:
         if not self.pet.isVisible():
             self.pet.show()
-        self.pet.play("waving", loops=2)
-        self._show_message(pick_message())
+        if self.cfg["mood_enabled"]:
+            decision = mood.decide(self._signals())
+            self._play_mood(decision)
+            self._show_reminder_line(lines.pick_line(decision.tone), decision.tone)
+        else:
+            self.pet.play("waving", loops=2)
+            self._show_message(pick_message())
         if mark:
             self.reminder.mark_fired()
 
     def snooze(self) -> None:
         self.reminder.snooze(10)
-        self._show_message("Snoozed for 10 minutes. Daisy will remind you!")
+        if self.cfg["mood_enabled"]:
+            self.mood_state.record_snooze()
+            mood.save(self.mood_state)
+            decision = mood.decide(
+                self._signals(just_snoozed=True)
+            )
+            self._play_mood(decision)
+            self._show_message(lines.pick_line(decision.tone))
+        else:
+            self._show_message("Snoozed for 10 minutes. Daisy will remind you!")
+
+    def _on_bubble_acknowledged(self) -> None:
+        if not self.cfg["mood_enabled"]:
+            return
+        now = datetime.now()
+        self.mood_state.record_ack(now)
+        mood.save(self.mood_state)
+        self._play_mood(mood.decide(self._signals(just_acknowledged=True)))
+        self._show_message(lines.ack_line())
+
+    def _on_bubble_ignored(self) -> None:
+        if not self.cfg["mood_enabled"]:
+            return
+        self.mood_state.record_ignored()
+        mood.save(self.mood_state)
 
     def snooze_custom(self, reminder_id: str) -> None:
         item = self.custom_reminders.find(reminder_id)

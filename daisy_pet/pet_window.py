@@ -15,6 +15,9 @@ GLASS_WIDTH_FRAC = 0.16
 GLASS_HEIGHT_FRAC = 0.2
 SIP_TILT_MAX_DEGREES = 22
 SIP_TILT_STEP_DEGREES = 4
+DEFAULT_FRAME_MS = 100
+FRAME_MS: dict[str, int] = {"drinking": 450}
+SINGLE_FRAME_HOLD_MS = 1500
 
 
 class PetWindow(QWidget):
@@ -46,9 +49,12 @@ class PetWindow(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setMouseTracking(True)
         self._timer = QTimer(self)
-        self._timer.setInterval(100)
+        self._timer.setInterval(DEFAULT_FRAME_MS)
         self._timer.timeout.connect(self._advance)
         self._timer.start()
+        self._single_frame_timer = QTimer(self)
+        self._single_frame_timer.setSingleShot(True)
+        self._single_frame_timer.timeout.connect(self._finish_single_frame)
         self._walk_timer = QTimer(self)
         self._walk_timer.timeout.connect(self._walk_tick)
         self._walk_target_x = 0
@@ -79,17 +85,27 @@ class PetWindow(QWidget):
         self.sprites.frames(then)
         if loops is not None and loops < 1:
             raise ValueError("loops must be at least 1")
+        self._single_frame_timer.stop()
         self._state = state
         self._frames = frames
         self._frame_index = 0
         self._remaining_loops = None if state == "idle" else loops
         self._then = then
+        self._timer.setInterval(FRAME_MS.get(state, DEFAULT_FRAME_MS))
+        if len(frames) == 1 and loops is not None:
+            self._single_frame_timer.start(loops * SINGLE_FRAME_HOLD_MS)
         self.update()
 
     def _switch_to(self, state: str) -> None:
         self._state = state
         self._frames = self.sprites.frames(state)
         self._frame_index = 0
+        self._timer.setInterval(FRAME_MS.get(state, DEFAULT_FRAME_MS))
+
+    def _finish_single_frame(self) -> None:
+        if len(self._frames) == 1 and self._remaining_loops is not None:
+            self._remaining_loops = None
+            self._switch_to(self._then)
 
     def _advance(self) -> None:
         if len(self._frames) == 1:
@@ -135,7 +151,7 @@ class PetWindow(QWidget):
             painter.setRenderHint(QPainter.Antialiasing)
             self._paint_glass(painter)
 
-    def start_sip(self, duration_ms: int = 1800) -> None:
+    def start_sip(self, duration_ms: int = 2700) -> None:
         """Act out drinking: a dedicated sprite if one's provided, otherwise
         the hands-near-chin pose with a drawn glass tilting toward her mouth.
         """
@@ -152,6 +168,7 @@ class PetWindow(QWidget):
 
     def stop_sip(self) -> None:
         self._sip_active = False
+        self._single_frame_timer.stop()
         self._sip_timer.stop()
         self._sip_tilt = 0.0
         self.update()
