@@ -1,7 +1,10 @@
 import random
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from typing import Callable
+
+from . import schedule
 
 
 @dataclass
@@ -37,6 +40,50 @@ class WaterReminder:
         self._validate_minutes(minutes)
         self.interval_minutes = minutes
         self._next_due = self.clock() + minutes * 60
+
+
+@dataclass
+class TimeOfDayReminder:
+    """Fires once a day at a fixed clock time (e.g. "15:00"), then rolls
+    over to the same time the next day.
+    """
+
+    time_of_day: str
+    clock: Callable[[], datetime] = datetime.now
+    _next_due: datetime = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        schedule.parse_time(self.time_of_day)  # raises if malformed
+        self._next_due = self._compute_next(self.clock())
+
+    def _compute_next(self, now: datetime) -> datetime:
+        target = schedule.parse_time(self.time_of_day)
+        candidate = now.replace(
+            hour=target.hour, minute=target.minute, second=0, microsecond=0
+        )
+        if candidate <= now:
+            candidate += timedelta(days=1)
+        return candidate
+
+    @property
+    def seconds_remaining(self) -> float:
+        return max(0.0, (self._next_due - self.clock()).total_seconds())
+
+    def due(self) -> bool:
+        return self.clock() >= self._next_due
+
+    def mark_fired(self) -> None:
+        self._next_due = self._compute_next(self.clock())
+
+    def snooze(self, minutes: int) -> None:
+        if not isinstance(minutes, int) or isinstance(minutes, bool) or minutes < 1:
+            raise ValueError("minutes must be an integer of at least 1")
+        self._next_due = self.clock() + timedelta(minutes=minutes)
+
+    def set_time_of_day(self, value: str) -> None:
+        schedule.parse_time(value)
+        self.time_of_day = value
+        self._next_due = self._compute_next(self.clock())
 
 
 MESSAGES = (
