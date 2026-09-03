@@ -189,6 +189,22 @@ def test_mood_and_ollama_defaults_and_validation(tmp_path):
     assert cfg["ollama_model"] == DEFAULTS["ollama_model"]
 
 
+def test_activity_and_scale_defaults_and_validation(tmp_path):
+    path = tmp_path / "config.json"
+    cfg = load(path)
+    assert cfg["activity_enabled"] is True
+    assert cfg["scale"] == 1.0
+    path.write_text(
+        json.dumps({"activity_enabled": "yes", "scale": 0.4}),
+        encoding="utf-8",
+    )
+    cfg = load(path)
+    assert cfg["activity_enabled"] is True
+    assert cfg["scale"] == DEFAULTS["scale"]
+    path.write_text(json.dumps({"scale": 3.1}), encoding="utf-8")
+    assert load(path)["scale"] == DEFAULTS["scale"]
+
+
 def test_non_local_ollama_url_is_rejected(tmp_path):
     path = tmp_path / "config.json"
     path.write_text(

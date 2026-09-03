@@ -38,6 +38,19 @@ def test_drinking_uses_slow_frame_interval(qapp, sheet):
     assert pet._timer.interval() == FRAME_MS["drinking"]
 
 
+def test_rescale_updates_frame_size_and_clamps_position(qapp, sheet):
+    pet = PetWindow(sheet)
+    screen = qapp.primaryScreen().availableGeometry()
+    pet.move(screen.right() - pet.width() + 1, screen.bottom() - pet.height() + 1)
+    pet.rescale(2.0)
+    pet.move(pet.clamp_position(pet.pos()))
+    assert pet.size().toTuple() == (384, 416)
+    assert pet.x() >= screen.left()
+    assert pet.y() >= screen.top()
+    assert pet.geometry().right() <= screen.right()
+    assert pet.geometry().bottom() <= screen.bottom()
+
+
 def test_start_walk_picks_direction_from_target(qapp, sheet):
     pet = PetWindow(sheet)
     pet.move(500, 100)

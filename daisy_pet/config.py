@@ -28,6 +28,7 @@ DEFAULTS = {
     "ollama_enabled": False,
     "ollama_url": "http://127.0.0.1:11434",
     "ollama_model": "llama3.2",
+    "activity_enabled": True,
 }
 
 MAX_CUSTOM_REMINDER_TEXT_LENGTH = 200
@@ -92,7 +93,7 @@ def _valid_value(key: str, value: Any) -> bool:
         return (
             isinstance(value, (int, float))
             and not isinstance(value, bool)
-            and value > 0
+            and 0.5 <= value <= 3.0
         )
     if key == "pos":
         return (
@@ -112,6 +113,7 @@ def _valid_value(key: str, value: Any) -> bool:
         "schedule_enabled",
         "mood_enabled",
         "ollama_enabled",
+        "activity_enabled",
     }:
         return isinstance(value, bool)
     if key == "ollama_url":

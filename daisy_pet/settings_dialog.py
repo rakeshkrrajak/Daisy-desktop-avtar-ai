@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -127,6 +128,13 @@ class SettingsDialog(QDialog):
         self.interval_minutes.setSuffix(" min")
         self.interval_minutes.setValue(cfg["interval_minutes"])
 
+        self.scale = QDoubleSpinBox()
+        self.scale.setRange(0.5, 3.0)
+        self.scale.setSingleStep(0.1)
+        self.scale.setDecimals(1)
+        self.scale.setSuffix("×")
+        self.scale.setValue(cfg["scale"])
+
         self.walk_enabled = QCheckBox("Enable walking animations")
         self.walk_enabled.setChecked(cfg["walk_enabled"])
 
@@ -168,9 +176,12 @@ class SettingsDialog(QDialog):
         self.ollama_enabled.setChecked(cfg["ollama_enabled"])
         self.ollama_url = QLineEdit(cfg["ollama_url"])
         self.ollama_model = QLineEdit(cfg["ollama_model"])
+        self.activity_enabled = QCheckBox("Enable activity awareness")
+        self.activity_enabled.setChecked(cfg["activity_enabled"])
 
         form = QFormLayout()
         form.addRow("Remind me to drink every", self.interval_minutes)
+        form.addRow("Daisy size", self.scale)
         form.addRow(self.walk_enabled)
         form.addRow("Act like drinking at", self.drink_fraction_percent)
         form.addRow("Wander every, at least", self.ambient_min)
@@ -183,6 +194,7 @@ class SettingsDialog(QDialog):
         form.addRow(self.ollama_enabled)
         form.addRow("Ollama URL", self.ollama_url)
         form.addRow("Ollama model", self.ollama_model)
+        form.addRow(self.activity_enabled)
 
         self.custom_list = QListWidget()
         for item in cfg["custom_reminders"]:
@@ -241,6 +253,7 @@ class SettingsDialog(QDialog):
         ambient_max = max(ambient_min, self.ambient_max.value())
         return {
             "interval_minutes": self.interval_minutes.value(),
+            "scale": self.scale.value(),
             "walk_enabled": self.walk_enabled.isChecked(),
             "walk_drink_fraction": self.drink_fraction_percent.value() / 100.0,
             "ambient_walk_min_minutes": ambient_min,
@@ -254,4 +267,5 @@ class SettingsDialog(QDialog):
             "ollama_enabled": self.ollama_enabled.isChecked(),
             "ollama_url": self.ollama_url.text().strip(),
             "ollama_model": self.ollama_model.text().strip(),
+            "activity_enabled": self.activity_enabled.isChecked(),
         }

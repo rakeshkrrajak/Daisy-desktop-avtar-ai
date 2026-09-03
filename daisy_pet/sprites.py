@@ -44,6 +44,12 @@ class SpriteSheet:
         if self._image.isNull():
             raise FileNotFoundError(f"could not load sprite sheet: {self.path}")
 
+    def rescale(self, scale: float) -> None:
+        if scale <= 0:
+            raise ValueError("scale must be positive")
+        self.scale = scale
+        self._frames.clear()
+
     @property
     def frame_size(self) -> tuple[int, int]:
         return round(CELL_W * self.scale), round(CELL_H * self.scale)

@@ -80,6 +80,13 @@ class PetWindow(QWidget):
     def is_walking(self) -> bool:
         return self._walk_timer.isActive()
 
+    def rescale(self, scale: float) -> None:
+        self.sprites.rescale(scale)
+        self._frames = self.sprites.frames(self._state)
+        self._frame_index = min(self._frame_index, len(self._frames) - 1)
+        self.setFixedSize(*self.sprites.frame_size)
+        self.update()
+
     def play(self, state: str, loops: int | None = 1, then: str = "idle") -> None:
         frames = self.sprites.frames(state)
         self.sprites.frames(then)
@@ -131,7 +138,7 @@ class PetWindow(QWidget):
             )
             for screen in screens
         ):
-            self.move(candidate)
+            self.move(self.clamp_position(candidate))
             return
         screen = QGuiApplication.primaryScreen()
         if screen is None:
@@ -141,6 +148,26 @@ class PetWindow(QWidget):
         self.move(
             area.right() - self.width() - 40,
             area.bottom() - self.height() - 40,
+        )
+
+    def clamp_position(self, position: QPoint) -> QPoint:
+        screens = QGuiApplication.screens()
+        screen = next(
+            (
+                screen
+                for screen in screens
+                if screen.availableGeometry().intersects(QRect(position, self.size()))
+            ),
+            QGuiApplication.primaryScreen(),
+        )
+        if screen is None:
+            return position
+        area = screen.availableGeometry()
+        max_x = max(area.left(), area.right() - self.width() + 1)
+        max_y = max(area.top(), area.bottom() - self.height() + 1)
+        return QPoint(
+            min(max(position.x(), area.left()), max_x),
+            min(max(position.y(), area.top()), max_y),
         )
 
     def paintEvent(self, event) -> None:
