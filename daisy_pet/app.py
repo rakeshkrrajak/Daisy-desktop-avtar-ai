@@ -17,6 +17,8 @@ from .sprites import SpriteSheet
 from .tray import DaisyTray
 from .walker import Walker
 
+SIP_DURATION_MS = 2700
+
 
 class _OllamaSignals(QObject):
     finished = Signal(str)
@@ -260,13 +262,19 @@ class DaisyApplication:
         )
 
         def act_it_out() -> None:
-            self.pet.start_sip()
+            self.pet.start_sip(SIP_DURATION_MS)
             self.reminder.mark_fired()
+            if decision is not None:
+                QTimer.singleShot(
+                    SIP_DURATION_MS,
+                    lambda: self._play_mood(decision)
+                    if self.pet.isVisible()
+                    else None,
+                )
 
         if decision is None:
             line = f"💧 {pick_message()}"
         else:
-            self._play_mood(decision)
             line = lines.pick_line(decision.tone)
         self._start_reminder_walk(
             line,

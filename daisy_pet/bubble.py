@@ -18,7 +18,6 @@ class SpeechBubble(QWidget):
         self._label = QLabel(self)
         self._label.setWordWrap(True)
         self._label.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self._label.setAttribute(Qt.WA_TransparentForMouseEvents)
         self._label.setMaximumWidth(236)
         self._label.setStyleSheet("color: #17202a; background: transparent;")
         self._label.setFont(QFont("Segoe UI", 10))

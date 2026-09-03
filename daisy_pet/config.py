@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from .ollama import is_local_url
 from . import schedule
 
 
@@ -114,8 +115,6 @@ def _valid_value(key: str, value: Any) -> bool:
     }:
         return isinstance(value, bool)
     if key == "ollama_url":
-        from .ollama import is_local_url
-
         return isinstance(value, str) and is_local_url(value)
     if key == "ollama_model":
         return isinstance(value, str) and bool(value.strip()) and len(value) <= 80
