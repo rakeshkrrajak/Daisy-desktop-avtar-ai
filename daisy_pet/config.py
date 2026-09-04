@@ -12,6 +12,7 @@ from . import schedule
 DEFAULTS = {
     "interval_minutes": 30,
     "bubble_seconds": 12,
+    "reminder_wait_seconds": 120,
     "scale": 1.0,
     "pos": None,
     "enabled": True,
@@ -96,6 +97,12 @@ def mood_state_path() -> Path:
 def _valid_value(key: str, value: Any) -> bool:
     if key in {"interval_minutes", "bubble_seconds"}:
         return isinstance(value, int) and not isinstance(value, bool) and value >= 1
+    if key == "reminder_wait_seconds":
+        return (
+            isinstance(value, int)
+            and not isinstance(value, bool)
+            and 15 <= value <= 600
+        )
     if key == "scale":
         return (
             isinstance(value, (int, float))

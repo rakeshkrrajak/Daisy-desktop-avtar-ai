@@ -33,9 +33,11 @@ like normal.
 Every so often Daisy wanders across the screen along the top of your
 taskbar just for fun. When a water reminder is due (on your configured
 interval), she walks in from the right edge, stops partway across (40% by
-default) and holds up her water bottle for a sip, along with a "drink water"
-speech bubble, then continues on her way to the left, walking off-screen and
-disappearing until the next reminder.
+default) and holds up her water bottle for a sip. She waits for your choice:
+**I drank it** records the sip, while **Snooze 5 min** postpones this reminder.
+If the choice bubble expires, the reminder is counted as ignored. Daisy then
+walks back out to the right and disappears until the next reminder. The
+**Snooze 10 minutes** tray command remains separate.
 
 ## Tray menu
 
@@ -62,6 +64,9 @@ configure:
 
 - **Remind me to drink every** — the reminder interval in minutes, any value
   from 1 to 240 (for example, 5 minutes for quick testing).
+- **Wait for my answer (seconds)** — how long Daisy waits at the drink point
+  for **I drank it** or **Snooze 5 min** before treating the reminder as
+  ignored.
 - **Daisy size** — choose a scale from 0.5× to 3.0×. Daisy resizes
   immediately when you accept the settings.
 - **Enable walking animations** — turn the reminder walk-in/out and ambient
@@ -97,6 +102,10 @@ configure:
   so you can choose whether to keep it or close it.
 - **Lifelike idle behaviour** — let Daisy occasionally play a quiet,
   pose-only idle animation. Set the minimum and maximum delay between poses.
+
+Speech bubbles use a colourful cartoon balloon with a directional tail rather
+than a plain rectangle, and the tail flips when the balloon must appear below
+the Daisy anchor.
 
 Daisy's "drinking" pose (`daisy_pet/assets/drinking/01.png`) is a dedicated
 illustration of her holding a water bottle, layered on top of the base
