@@ -120,5 +120,5 @@ def test_watcher_can_select_an_alternate_observation_line():
 
 
 def test_activity_kind_mappings_cover_observation_lines_and_moods():
-    assert set(OBSERVATION_LINES) == set(MOOD_FOR_KIND) == set(TONE_FOR_KIND)
+    assert set(OBSERVATION_LINES) <= set(MOOD_FOR_KIND) == set(TONE_FOR_KIND)
     assert all(mood in POSE_FOR_MOOD for mood in MOOD_FOR_KIND.values())

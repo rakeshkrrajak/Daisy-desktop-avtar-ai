@@ -1,12 +1,12 @@
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Signal
 from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import QApplication, QDialog
 
-from . import activity, config, schedule
+from . import activity, config, liveliness, schedule, tabs
 from .bubble import SpeechBubble
 from .custom_reminders import CustomReminder, CustomReminderStore
 from . import lines, mood, ollama
@@ -89,10 +89,26 @@ class DaisyApplication:
         self.ambient_timer.timeout.connect(self._on_ambient_timer)
         self._schedule_next_ambient_walk()
         self.activity_watcher = activity.ActivityWatcher()
+        self.latest_activity_snapshot = None
         self.activity_timer = QTimer()
         self.activity_timer.setInterval(20_000)
         self.activity_timer.timeout.connect(self._poll_activity)
         self.activity_timer.start()
+        self.tab_watcher = tabs.TabWatcher(
+            idle_minutes=self.cfg["tab_idle_minutes"],
+            min_open=self.cfg["tab_min_open"],
+        )
+        self.tab_timer = QTimer()
+        self.tab_timer.setInterval(60_000)
+        self.tab_timer.timeout.connect(self._poll_tabs)
+        self.tab_timer.start()
+        self._liveliness_rng = random.Random()
+        self._liveliness_last_name = None
+        self._last_liveliness_chatter_at = None
+        self.liveliness_timer = QTimer()
+        self.liveliness_timer.setSingleShot(True)
+        self.liveliness_timer.timeout.connect(self._on_liveliness_timer)
+        self._schedule_next_liveliness()
 
     def _save_position(self, position) -> None:
         self.cfg["pos"] = [position.x(), position.y()]
@@ -237,6 +253,7 @@ class DaisyApplication:
         snapshot = activity.probe()
         if snapshot is None:
             return
+        self.latest_activity_snapshot = snapshot
         observation = self.activity_watcher.observe(snapshot)
         if observation is None or self.bubble.isVisible():
             return
@@ -249,6 +266,84 @@ class DaisyApplication:
                 )
             )
         self._show_message(observation.text)
+
+    def _poll_tabs(self) -> None:
+        if (
+            not self.cfg["tab_hints_enabled"]
+            or not self.cfg["enabled"]
+            or not self._schedule_active()
+            or self.walker.busy
+            or self.bubble.isVisible()
+        ):
+            return
+        snapshot = tabs.probe_tabs()
+        if snapshot is None:
+            return
+        observation = self.tab_watcher.observe(snapshot)
+        if observation is None or self.bubble.isVisible():
+            return
+        if self.cfg["mood_enabled"]:
+            self._play_mood(
+                mood.MoodDecision(
+                    activity.MOOD_FOR_KIND[observation.kind],
+                    observation.tone,
+                    observation.kind,
+                )
+            )
+        self._show_message(observation.text)
+
+    def _schedule_next_liveliness(self) -> None:
+        delay = liveliness.next_delay_seconds(
+            self._liveliness_rng,
+            self.cfg["liveliness_min_seconds"],
+            self.cfg["liveliness_max_seconds"],
+        )
+        self.liveliness_timer.start(delay * 1000)
+
+    def _on_liveliness_timer(self) -> None:
+        try:
+            if (
+                self.cfg["liveliness_enabled"]
+                and self.cfg["enabled"]
+                and self._schedule_active()
+                and not self.walker.busy
+                and self.pet.isVisible()
+                and not self.bubble.isVisible()
+            ):
+                snapshot = self.latest_activity_snapshot
+                if snapshot is None or (
+                    snapshot.idle_seconds < 15 * 60
+                    and not any(
+                        hint in snapshot.window.title.lower()
+                        for hint in activity.MEETING_HINTS
+                    )
+                ):
+                    behaviour = liveliness.pick(
+                        datetime.now().hour,
+                        self._liveliness_rng,
+                        self._liveliness_last_name,
+                    )
+                    self._liveliness_last_name = behaviour.name
+                    state = (
+                        behaviour.preferred
+                        if self.sprites.has_custom_state(behaviour.preferred)
+                        else behaviour.fallback
+                    )
+                    self.pet.play(state, loops=behaviour.loops, then="idle")
+                    now = datetime.now()
+                    if (
+                        behaviour.chatter
+                        and self._liveliness_rng.randrange(6) == 0
+                        and (
+                            self._last_liveliness_chatter_at is None
+                            or now - self._last_liveliness_chatter_at
+                            >= timedelta(minutes=20)
+                        )
+                    ):
+                        self._last_liveliness_chatter_at = now
+                        self._show_message(lines.idle_chatter(self._liveliness_rng))
+        finally:
+            self._schedule_next_liveliness()
 
     def _start_reminder_walk(
         self,
@@ -426,8 +521,13 @@ class DaisyApplication:
         self.custom_reminders = CustomReminderStore.from_config_list(
             self.cfg["custom_reminders"]
         )
+        self.tab_watcher = tabs.TabWatcher(
+            idle_minutes=self.cfg["tab_idle_minutes"],
+            min_open=self.cfg["tab_min_open"],
+        )
         self._refresh_tray_custom_reminders()
         self._schedule_next_ambient_walk()
+        self._schedule_next_liveliness()
         self._apply_schedule_visibility()
 
 

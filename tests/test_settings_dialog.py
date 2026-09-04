@@ -23,11 +23,23 @@ def test_dialog_reflects_current_config(qapp):
         "ollama_url": "http://127.0.0.1:11434",
         "ollama_model": "llama3.2",
         "activity_enabled": True,
+        "tab_hints_enabled": True,
+        "tab_idle_minutes": 60,
+        "tab_min_open": 8,
+        "liveliness_enabled": True,
+        "liveliness_min_seconds": 45,
+        "liveliness_max_seconds": 150,
         "scale": 1.5,
     }
     dialog = SettingsDialog(cfg)
     dialog.scale.setValue(2.1)
     dialog.activity_enabled.setChecked(False)
+    dialog.tab_hints_enabled.setChecked(False)
+    dialog.tab_idle_minutes.setValue(75)
+    dialog.tab_min_open.setValue(10)
+    dialog.liveliness_enabled.setChecked(False)
+    dialog.liveliness_min_seconds.setValue(30)
+    dialog.liveliness_max_seconds.setValue(120)
     assert dialog.values() == {
         "interval_minutes": 5,
         "scale": 2.1,
@@ -45,6 +57,12 @@ def test_dialog_reflects_current_config(qapp):
         "ollama_url": "http://127.0.0.1:11434",
         "ollama_model": "llama3.2",
         "activity_enabled": False,
+        "tab_hints_enabled": False,
+        "tab_idle_minutes": 75,
+        "tab_min_open": 10,
+        "liveliness_enabled": False,
+        "liveliness_min_seconds": 30,
+        "liveliness_max_seconds": 120,
     }
 
 

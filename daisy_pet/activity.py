@@ -22,6 +22,7 @@ MOOD_FOR_KIND = {
     "long_focus": "thinking",
     "idle_return": "content",
     "sitting": "thinking",
+    "stale_tabs": "waiting",
 }
 TONE_FOR_KIND = {
     "meeting": "playful",
@@ -30,6 +31,7 @@ TONE_FOR_KIND = {
     "long_focus": "gentle",
     "idle_return": "cheerful",
     "sitting": "gentle",
+    "stale_tabs": "firm",
 }
 
 
@@ -79,6 +81,33 @@ def _process_name(user32, kernel32, hwnd) -> str:
                 pass
     except (AttributeError, OSError, TypeError):
         return ""
+
+
+def browser_windows() -> list[tuple[int, str, str]]:
+    """Return visible browser windows as (handle, title, process)."""
+    try:
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+    except (AttributeError, OSError):
+        return []
+    windows: list[tuple[int, str, str]] = []
+    try:
+        callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+        def visit(hwnd, _lparam):
+            try:
+                if user32.IsWindowVisible(hwnd):
+                    process = _process_name(user32, kernel32, hwnd)
+                    if process in BROWSER_PROCESSES:
+                        windows.append((int(hwnd), _window_title(user32, hwnd), process))
+            except (AttributeError, OSError, TypeError):
+                pass
+            return True
+
+        user32.EnumWindows(callback_type(visit), 0)
+    except (AttributeError, OSError, TypeError):
+        return []
+    return windows
 
 
 def _safe_windows_probe() -> ActivitySnapshot:

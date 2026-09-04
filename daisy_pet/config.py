@@ -29,6 +29,12 @@ DEFAULTS = {
     "ollama_url": "http://127.0.0.1:11434",
     "ollama_model": "llama3.2",
     "activity_enabled": True,
+    "tab_hints_enabled": True,
+    "tab_idle_minutes": 60,
+    "tab_min_open": 8,
+    "liveliness_enabled": True,
+    "liveliness_min_seconds": 45,
+    "liveliness_max_seconds": 150,
 }
 
 MAX_CUSTOM_REMINDER_TEXT_LENGTH = 200
@@ -114,6 +120,8 @@ def _valid_value(key: str, value: Any) -> bool:
         "mood_enabled",
         "ollama_enabled",
         "activity_enabled",
+        "tab_hints_enabled",
+        "liveliness_enabled",
     }:
         return isinstance(value, bool)
     if key == "ollama_url":
@@ -126,6 +134,12 @@ def _valid_value(key: str, value: Any) -> bool:
         "walk_crossing_seconds",
     }:
         return isinstance(value, int) and not isinstance(value, bool) and value >= 1
+    if key == "tab_idle_minutes":
+        return isinstance(value, int) and not isinstance(value, bool) and value >= 5
+    if key == "tab_min_open":
+        return isinstance(value, int) and not isinstance(value, bool) and value >= 1
+    if key in {"liveliness_min_seconds", "liveliness_max_seconds"}:
+        return isinstance(value, int) and not isinstance(value, bool) and value >= 10
     if key == "walk_drink_fraction":
         return (
             isinstance(value, (int, float))

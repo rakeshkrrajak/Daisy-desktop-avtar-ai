@@ -178,6 +178,26 @@ class SettingsDialog(QDialog):
         self.ollama_model = QLineEdit(cfg["ollama_model"])
         self.activity_enabled = QCheckBox("Enable activity awareness")
         self.activity_enabled.setChecked(cfg["activity_enabled"])
+        self.tab_hints_enabled = QCheckBox("Suggest closing stale browser tabs")
+        self.tab_hints_enabled.setChecked(cfg["tab_hints_enabled"])
+        self.tab_idle_minutes = QSpinBox()
+        self.tab_idle_minutes.setRange(5, 1440)
+        self.tab_idle_minutes.setSuffix(" min")
+        self.tab_idle_minutes.setValue(cfg["tab_idle_minutes"])
+        self.tab_min_open = QSpinBox()
+        self.tab_min_open.setRange(1, 100)
+        self.tab_min_open.setSuffix(" windows")
+        self.tab_min_open.setValue(cfg["tab_min_open"])
+        self.liveliness_enabled = QCheckBox("Enable lifelike idle behaviour")
+        self.liveliness_enabled.setChecked(cfg["liveliness_enabled"])
+        self.liveliness_min_seconds = QSpinBox()
+        self.liveliness_min_seconds.setRange(10, 3600)
+        self.liveliness_min_seconds.setSuffix(" sec")
+        self.liveliness_min_seconds.setValue(cfg["liveliness_min_seconds"])
+        self.liveliness_max_seconds = QSpinBox()
+        self.liveliness_max_seconds.setRange(10, 3600)
+        self.liveliness_max_seconds.setSuffix(" sec")
+        self.liveliness_max_seconds.setValue(cfg["liveliness_max_seconds"])
 
         form = QFormLayout()
         form.addRow("Remind me to drink every", self.interval_minutes)
@@ -195,6 +215,12 @@ class SettingsDialog(QDialog):
         form.addRow("Ollama URL", self.ollama_url)
         form.addRow("Ollama model", self.ollama_model)
         form.addRow(self.activity_enabled)
+        form.addRow(self.tab_hints_enabled)
+        form.addRow("Stale tab age", self.tab_idle_minutes)
+        form.addRow("Minimum browser windows", self.tab_min_open)
+        form.addRow(self.liveliness_enabled)
+        form.addRow("Idle pose at least every", self.liveliness_min_seconds)
+        form.addRow("Idle pose at most every", self.liveliness_max_seconds)
 
         self.custom_list = QListWidget()
         for item in cfg["custom_reminders"]:
@@ -268,4 +294,13 @@ class SettingsDialog(QDialog):
             "ollama_url": self.ollama_url.text().strip(),
             "ollama_model": self.ollama_model.text().strip(),
             "activity_enabled": self.activity_enabled.isChecked(),
+            "tab_hints_enabled": self.tab_hints_enabled.isChecked(),
+            "tab_idle_minutes": self.tab_idle_minutes.value(),
+            "tab_min_open": self.tab_min_open.value(),
+            "liveliness_enabled": self.liveliness_enabled.isChecked(),
+            "liveliness_min_seconds": self.liveliness_min_seconds.value(),
+            "liveliness_max_seconds": max(
+                self.liveliness_min_seconds.value(),
+                self.liveliness_max_seconds.value(),
+            ),
         }

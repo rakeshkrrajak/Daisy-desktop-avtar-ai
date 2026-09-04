@@ -1,4 +1,5 @@
 import random
+import re
 
 from .reminder import MESSAGES
 
@@ -57,6 +58,16 @@ OBSERVATION_LINES: dict[str, tuple[str, ...]] = {
         "Daisy says: stand up, stretch, and take a sip.",
     ),
 }
+STALE_TAB_PREFIXES = (
+    "Untouched for {age}: {titles}. Close a few?",
+    "These tabs have been waiting {age}: {titles}. Close a few?",
+)
+IDLE_CHATTER = (
+    "Just keeping you company.",
+    "A tiny Daisy check-in.",
+    "Hope your day is blooming.",
+    "Quietly cheering you on.",
+)
 
 
 def pick_line(tone: str, rng: random.Random | None = None) -> str:
@@ -81,3 +92,27 @@ def pick_observation(
 ) -> str:
     chooser = rng or random
     return chooser.choice(OBSERVATION_LINES[kind])
+
+
+def stale_tab_line(
+    titles: list[str] | tuple[str, ...],
+    minutes: int,
+    rng: random.Random | None = None,
+) -> str:
+    chooser = rng or random
+    cleaned = []
+    for title in titles[:2]:
+        title = re.sub(r"\s+", " ", title).strip()
+        if len(title) > 40:
+            title = f"{title[:39]}…"
+        cleaned.append(f'"{title}"')
+    prefix = chooser.choice(STALE_TAB_PREFIXES)
+    minutes = max(1, int(minutes))
+    age = f"{minutes} min" if minutes < 60 else f"{minutes // 60}h+"
+    line = prefix.format(age=age, titles=", ".join(cleaned))
+    return line if len(line) <= 220 else f"{line[:219]}…"
+
+
+def idle_chatter(rng: random.Random | None = None) -> str:
+    chooser = rng or random
+    return chooser.choice(IDLE_CHATTER)

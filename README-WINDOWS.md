@@ -89,6 +89,12 @@ configure:
   walk-in cinematic as the water reminder (waving instead of drinking) and
   never overlap with it or each other — only one reminder plays out at a
   time, and others just wait their turn.
+- **Activity awareness** — allow Daisy to notice local foreground-window
+  activity and offer occasional comments.
+- **Stale browser-tab hints** — set the minimum age and browser-window count
+  before Daisy suggests closing old tabs.
+- **Lifelike idle behaviour** — let Daisy occasionally play a quiet,
+  pose-only idle animation. Set the minimum and maximum delay between poses.
 
 Daisy's "drinking" pose (`daisy_pet/assets/drinking/01.png`) is a dedicated
 illustration of her holding a water bottle, layered on top of the base
@@ -141,6 +147,39 @@ every 20 seconds and are entirely local: the information is never stored or
 sent anywhere. Turn off **Enable activity awareness** in **Daisy Settings** to
 disable these checks. Exact browser *tab* counts are not detected; Daisy only
 counts browser windows.
+
+## Stale browser-tab hints
+
+When enabled, Daisy keeps track of browser pages that have not been active for
+the configured number of minutes and, when enough browser tabs or windows are
+open, may suggest closing up to two of them. The hint is local and temporary:
+tab titles and their last-active timestamps are held in memory only, never
+written to the configuration, logged, or sent anywhere.
+
+Per-tab titles require the optional Windows UI Automation package:
+
+```text
+pip install comtypes==1.4.16
+```
+
+`comtypes` is optional and MIT-licensed; it is not a required Daisy
+dependency. Without it, Daisy falls back to one pseudo-tab per visible
+browser window and counts browser windows rather than exact tabs. Disable
+**Suggest closing stale browser tabs** in **Daisy Settings** to turn this
+feature off.
+
+## Lifelike idle behaviour
+
+With **Enable lifelike idle behaviour**, Daisy occasionally plays a small
+pose-only animation chosen for the time of day, then returns to idle. The
+delay is randomized between the configured minimum and maximum seconds. A
+rare, short line of idle chatter may appear, but chatter is rate-limited and
+never replaces the water reminders.
+
+Daisy pauses these idle poses while a reminder walk or speech bubble is active,
+when the schedule is inactive, during a meeting title, or after a long period
+of user inactivity. Turn off **Enable lifelike idle behaviour** in **Daisy
+Settings** to disable it.
 
 ## Troubleshooting
 
