@@ -58,6 +58,121 @@ def test_water_walk_plays_mood_after_sip(monkeypatch, qapp):
     assert ("mood", "happy") in events
 
 
+def test_activity_message_abandons_pending_reminder_choice(monkeypatch):
+    events = []
+    app = DaisyApplication.__new__(DaisyApplication)
+    app.cfg = {
+        "activity_enabled": True,
+        "enabled": True,
+        "schedule_enabled": False,
+        "mood_enabled": True,
+        "bubble_seconds": 12,
+    }
+    app.walker = SimpleNamespace(busy=False)
+    app._schedule_active = lambda: True
+    app._reminder_choice_active = True
+    app._bubble_generation = 0
+    app.mood_state = SimpleNamespace(
+        record_ignored=lambda: events.append("ignored")
+    )
+    app._finish_reminder_walk = lambda: events.append("finish")
+    app.bubble = SimpleNamespace(
+        isVisible=lambda: False,
+        show_message=lambda *args, **kwargs: events.append("message"),
+    )
+    app.pet = SimpleNamespace(geometry=lambda: QRect(10, 20, 50, 60))
+    app.activity_watcher = SimpleNamespace(
+        observe=lambda snapshot: Observation("sitting", "Stretch?", "gentle")
+    )
+    monkeypatch.setattr(
+        "daisy_pet.app.activity.probe",
+        lambda: ActivitySnapshot(
+            WindowInfo("Editor", "code.exe"), 0, 0, datetime.now()
+        ),
+    )
+    monkeypatch.setattr("daisy_pet.app.mood.save", lambda state: None)
+    app._play_mood = lambda decision: None
+
+    app._poll_activity()
+
+    assert app._reminder_choice_active is False
+    assert events == ["ignored", "finish", "message"]
+
+
+def test_tab_review_prompt_abandons_pending_reminder_choice(monkeypatch):
+    events = []
+    app = DaisyApplication.__new__(DaisyApplication)
+    app.cfg = {
+        "tab_hints_enabled": True,
+        "tab_review_enabled": True,
+        "enabled": True,
+        "schedule_enabled": False,
+        "mood_enabled": True,
+        "bubble_seconds": 12,
+    }
+    app.walker = SimpleNamespace(busy=False)
+    app._schedule_active = lambda: True
+    app._reminder_choice_active = True
+    app._bubble_generation = 0
+    app.mood_state = SimpleNamespace(
+        record_ignored=lambda: events.append("ignored")
+    )
+    app._finish_reminder_walk = lambda: events.append("finish")
+    app.bubble = SimpleNamespace(
+        isVisible=lambda: False,
+        show_choice=lambda *args, **kwargs: events.append("prompt"),
+    )
+    app.pet = SimpleNamespace(geometry=lambda: QRect(10, 20, 50, 60))
+    app.tab_watcher = SimpleNamespace(
+        last_stale_tabs=(),
+        observe=lambda snapshot: Observation(
+            "stale_tabs", "Close these?", "firm"
+        ),
+    )
+    app.tab_review = SimpleNamespace(active=False)
+    app._tab_review_prompt = False
+    monkeypatch.setattr(
+        "daisy_pet.app.tabs.probe_tabs",
+        lambda: TabSnapshot((), datetime.now(), "windows"),
+    )
+    monkeypatch.setattr("daisy_pet.app.mood.save", lambda state: None)
+    app._play_mood = lambda decision: None
+
+    app._poll_tabs()
+
+    assert app._reminder_choice_active is False
+    assert events == ["ignored", "finish", "prompt"]
+
+
+def test_reminder_ack_choice_does_not_record_ignored(monkeypatch):
+    events = []
+    app = DaisyApplication.__new__(DaisyApplication)
+    app.cfg = {"mood_enabled": True}
+    app._reminder_choice_active = True
+    app.mood_state = SimpleNamespace(
+        record_ack=lambda now: events.append("ack"),
+        record_ignored=lambda: events.append("ignored"),
+    )
+    app._signals = lambda **flags: None
+    app._play_mood = lambda decision: None
+    app._show_message = lambda text: events.append("message")
+    app._finish_reminder_walk = lambda: events.append("finish")
+    monkeypatch.setattr("daisy_pet.app.mood.save", lambda state: None)
+    monkeypatch.setattr(
+        "daisy_pet.app.mood.decide",
+        lambda signals: MoodDecision("happy", "cheerful", "ack"),
+    )
+    monkeypatch.setattr(
+        "daisy_pet.app.QTimer.singleShot",
+        lambda delay, callback: events.append(delay),
+    )
+
+    app._on_bubble_choice("I drank it")
+
+    assert "ack" in events
+    assert "ignored" not in events
+
+
 def test_water_reminder_waits_for_choice_without_walkout_timer(monkeypatch, qapp):
     callbacks = []
     app = DaisyApplication.__new__(DaisyApplication)

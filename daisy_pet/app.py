@@ -144,6 +144,7 @@ class DaisyApplication:
             self._play_mood(mood.decide(self._signals(just_dragged=True)))
 
     def _show_message(self, text: str, actionable: bool = False) -> None:
+        self._abandon_reminder_choice()
         self._bubble_generation += 1
         self.bubble.show_message(
             text,
@@ -180,6 +181,7 @@ class DaisyApplication:
         self.pet.play(state, loops=1, then="idle")
 
     def _show_reminder_line(self, line: str, tone: str, actionable: bool = True) -> None:
+        self._abandon_reminder_choice()
         self._show_message(line, actionable=actionable)
         if not self.cfg["ollama_enabled"]:
             return
@@ -219,6 +221,15 @@ class DaisyApplication:
     def _replace_ollama_line(self, text: str, generation: int) -> None:
         if generation == self._bubble_generation and self.bubble.isVisible():
             self.bubble.set_message_text(text)
+
+    def _abandon_reminder_choice(self) -> None:
+        if not self._reminder_choice_active:
+            return
+        self._reminder_choice_active = False
+        if self.cfg["mood_enabled"]:
+            self.mood_state.record_ignored()
+            mood.save(self.mood_state)
+        self._finish_reminder_walk()
 
     def _open_pet_menu(self) -> None:
         self.tray.menu.popup(QCursor.pos())
@@ -347,6 +358,7 @@ class DaisyApplication:
                 )
             )
         if self.cfg["tab_review_enabled"]:
+            self._abandon_reminder_choice()
             self._pending_review_tabs = self.tab_watcher.last_stale_tabs
             self._tab_review_prompt = True
             self.bubble.show_choice(
@@ -680,11 +692,7 @@ class DaisyApplication:
 
     def _on_bubble_ignored(self) -> None:
         if self._reminder_choice_active:
-            self._reminder_choice_active = False
-            if self.cfg["mood_enabled"]:
-                self.mood_state.record_ignored()
-                mood.save(self.mood_state)
-            self._finish_reminder_walk()
+            self._abandon_reminder_choice()
             return
         if self._tab_review_active():
             self._cancel_tab_review()
