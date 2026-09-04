@@ -4,6 +4,7 @@ from PySide6.QtGui import (
     QFont,
     QGuiApplication,
     QPainter,
+    QLinearGradient,
     QPainterPath,
     QPen,
 )
@@ -16,13 +17,15 @@ from PySide6.QtWidgets import (
 )
 
 
-TAIL_HEIGHT = 20
-LUMP_INSET = 12
+TAIL_HEIGHT = 32
+BODY_INSET = 4
 SHADOW_OFFSET = 6
-FILL = "#8ed8f8"
-OUTLINE = "#2f8fc4"
-SHADOW = "#1c7bab"
-INK = "#0d3b52"
+OUTLINE_WIDTH = 4
+CORNER = 22
+FILL_TOP = "#fff6d6"
+FILL_BOTTOM = "#ffe082"
+OUTLINE = "#20242b"
+INK = "#20242b"
 
 
 class SpeechBubble(QWidget):
@@ -43,7 +46,9 @@ class SpeechBubble(QWidget):
         self._label.setAttribute(Qt.WA_TransparentForMouseEvents)
         self._label.setFixedWidth(236)
         self._label.setStyleSheet(f"color: {INK}; background: transparent;")
-        self._label.setFont(QFont("Segoe UI", 10))
+        font = QFont("Segoe UI", 10)
+        font.setBold(True)
+        self._label.setFont(font)
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(
             20, 18, 20 + SHADOW_OFFSET, 18 + SHADOW_OFFSET
@@ -90,8 +95,8 @@ class SpeechBubble(QWidget):
             button = QPushButton(choice, self)
             button.setStyleSheet(
                 f"color: {INK}; background: #ffffff; "
-                f"border: 2px solid {OUTLINE}; border-radius: 9px; "
-                "padding: 5px 10px; font-weight: bold;"
+                f"border: 3px solid {OUTLINE}; border-radius: 14px; "
+                "padding: 5px 12px; font-weight: bold;"
             )
             button.clicked.connect(
                 lambda _checked=False, label=choice: self._choose(label)
@@ -171,74 +176,43 @@ class SpeechBubble(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         height = self.height()
-        body_top = (TAIL_HEIGHT if self._tail_below else 0) + LUMP_INSET
+        body_top = (TAIL_HEIGHT if self._tail_below else 0) + BODY_INSET
         body_bottom = (
-            height - (0 if self._tail_below else TAIL_HEIGHT) - LUMP_INSET
+            height - (0 if self._tail_below else TAIL_HEIGHT) - BODY_INSET
         )
         body = QRectF(
-            LUMP_INSET,
+            BODY_INSET,
             body_top,
-            self.width() - 2 * LUMP_INSET - SHADOW_OFFSET,
+            self.width() - 2 * BODY_INSET - SHADOW_OFFSET,
             body_bottom - body_top - SHADOW_OFFSET,
         )
         path = QPainterPath()
-        path.addRoundedRect(body, 16, 16)
-        for index in range(4):
-            center_x = body.left() + body.width() * (index + 0.5) / 4
-            path = path.united(self._lump(center_x, body.top(), 22, 15))
-            path = path.united(self._lump(center_x, body.bottom(), 22, 15))
-        for index in range(2):
-            center_y = body.top() + body.height() * (index + 0.5) / 2
-            path = path.united(self._lump(body.left(), center_y, 14, 18))
-            path = path.united(self._lump(body.right(), center_y, 14, 18))
-        path = path.united(self._tail(body, height))
+        path.addRoundedRect(body, CORNER, CORNER)
+        path = path.united(self._tail(body))
 
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(SHADOW))
+        painter.setBrush(QColor(OUTLINE))
         painter.drawPath(path.translated(SHADOW_OFFSET, SHADOW_OFFSET))
-        painter.setPen(QPen(QColor(OUTLINE), 4))
-        painter.setBrush(QColor(FILL))
+        gradient = QLinearGradient(0, body.top(), 0, body.bottom())
+        gradient.setColorAt(0, QColor(FILL_TOP))
+        gradient.setColorAt(1, QColor(FILL_BOTTOM))
+        painter.setPen(QPen(QColor(OUTLINE), OUTLINE_WIDTH))
+        painter.setBrush(gradient)
         painter.drawPath(path)
-        self._paint_highlights(painter, body)
 
-    @staticmethod
-    def _paint_highlights(painter: QPainter, body: QRectF) -> None:
-        """Comic-style crescent glints inside the top-left of the cloud."""
-        painter.setBrush(Qt.NoBrush)
-        glint = QPen(QColor("#ffffff"), 4)
-        glint.setCapStyle(Qt.RoundCap)
-        painter.setPen(glint)
-        long_arc = QRectF(body.left() + 4, body.top() - 6, 74, 46)
-        painter.drawArc(long_arc, 120 * 16, 70 * 16)
-        short_arc = QRectF(body.left() + 70, body.top() - 12, 52, 40)
-        painter.drawArc(short_arc, 95 * 16, 45 * 16)
-
-    def _tail(self, body: QRectF, height: float) -> QPainterPath:
+    def _tail(self, body: QRectF) -> QPainterPath:
         center_x = body.center().x()
         if self._tail_below:
-            base_y, tip_y = body.top() + 8, 4.0
+            base_y = body.top() + 2
+            tip_y = base_y - TAIL_HEIGHT
         else:
-            base_y, tip_y = body.bottom() - 8, height - SHADOW_OFFSET - 4
+            base_y = body.bottom() - 2
+            tip_y = base_y + TAIL_HEIGHT
         path = QPainterPath()
-        path.moveTo(center_x - 26, base_y)
-        path.quadTo(center_x - 20, tip_y, center_x - 2, tip_y)
-        path.quadTo(center_x - 6, base_y + (10 if self._tail_below else -10), center_x + 12, base_y)
+        path.moveTo(center_x - 34, base_y)
+        path.lineTo(center_x - 6, tip_y)
+        path.lineTo(center_x + 20, base_y)
         path.closeSubpath()
-        return path
-
-    @staticmethod
-    def _lump(
-        center_x: float, center_y: float, radius_x: float, radius_y: float
-    ) -> QPainterPath:
-        path = QPainterPath()
-        path.addEllipse(
-            QRectF(
-                center_x - radius_x,
-                center_y - radius_y,
-                radius_x * 2,
-                radius_y * 2,
-            )
-        )
         return path
 
     def mousePressEvent(self, event) -> None:
