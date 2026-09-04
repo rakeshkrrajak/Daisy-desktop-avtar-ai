@@ -1,11 +1,18 @@
 from PySide6.QtCore import QRect, Qt, QTimer, Signal
 from PySide6.QtGui import QFont, QGuiApplication, QPainter
-from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 
 class SpeechBubble(QWidget):
     acknowledged = Signal()
     ignored = Signal()
+    chose = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -18,26 +25,72 @@ class SpeechBubble(QWidget):
         self._label = QLabel(self)
         self._label.setWordWrap(True)
         self._label.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self._label.setMaximumWidth(236)
+        self._label.setFixedWidth(236)
         self._label.setStyleSheet("color: #17202a; background: transparent;")
         self._label.setFont(QFont("Segoe UI", 10))
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 9, 12, 9)
         layout.addWidget(self._label)
+        self._choice_layout = QHBoxLayout()
+        layout.addLayout(self._choice_layout)
+        self._choice_buttons: list[QPushButton] = []
+        self._choice_layout.setEnabled(False)
         self._hide_timer: QTimer | None = None
         self._actionable = False
+        self._choice_mode = False
         self._clicked = False
 
     def show_message(
         self, text: str, near: QRect, seconds: int, actionable: bool = False
     ) -> None:
+        self._clear_choices()
         self._actionable = actionable
+        self._choice_mode = False
         self._clicked = False
         if actionable:
             text = f"{text}\nClick me once you've had a sip"
         self._label.setText(text)
-        self._label.adjustSize()
+        self._label.setFixedHeight(self._label.heightForWidth(236))
         self.adjustSize()
+        self._show_near(near, seconds)
+
+    def show_choice(
+        self,
+        text: str,
+        near: QRect,
+        seconds: int,
+        choices: tuple[str, str],
+    ) -> None:
+        self._actionable = False
+        self._choice_mode = True
+        self._clicked = False
+        self._label.setText(text)
+        self._label.setFixedHeight(self._label.heightForWidth(236))
+        self._clear_choices()
+        for choice in choices:
+            button = QPushButton(choice, self)
+            button.setStyleSheet(
+                "color: #17202a; background: #e8f0f7; "
+                "border: 1px solid #b7c9d6; border-radius: 5px; padding: 4px 8px;"
+            )
+            button.clicked.connect(
+                lambda _checked=False, label=choice: self._choose(label)
+            )
+            self._choice_layout.addWidget(button)
+            self._choice_buttons.append(button)
+        self._choice_layout.setEnabled(True)
+        self.adjustSize()
+        self._show_near(near, seconds)
+
+    def _clear_choices(self) -> None:
+        for button in self._choice_buttons:
+            self._choice_layout.removeWidget(button)
+            button.setParent(None)
+            button.deleteLater()
+        self._choice_buttons.clear()
+        self._choice_layout.setEnabled(False)
+
+    def _show_near(self, near: QRect, seconds: int) -> None:
         screen = (
             QGuiApplication.screenAt(near.center())
             or self.screen()
@@ -58,17 +111,32 @@ class SpeechBubble(QWidget):
         self._hide_timer.timeout.connect(self._expire)
         self._hide_timer.start(max(1, seconds) * 1000)
 
+    def _choose(self, choice: str) -> None:
+        self._actionable = False
+        if self._hide_timer is not None:
+            self._hide_timer.stop()
+        self.hide()
+        self.chose.emit(choice)
+
     def set_message_text(self, text: str) -> None:
         if self._actionable:
             text = f"{text}\nClick me once you've had a sip"
         self._label.setText(text)
-        self._label.adjustSize()
+        self._label.setFixedHeight(self._label.heightForWidth(236))
         self.adjustSize()
 
     def _expire(self) -> None:
         if self._actionable and not self._clicked:
             self.ignored.emit()
+        elif self._choice_mode:
+            self.ignored.emit()
+        self._choice_mode = False
         self.hide()
+
+    def hide(self) -> None:
+        if self._hide_timer is not None:
+            self._hide_timer.stop()
+        super().hide()
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)

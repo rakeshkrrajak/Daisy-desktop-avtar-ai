@@ -24,6 +24,7 @@ def test_dialog_reflects_current_config(qapp):
         "ollama_model": "llama3.2",
         "activity_enabled": True,
         "tab_hints_enabled": True,
+        "tab_review_enabled": True,
         "tab_idle_minutes": 60,
         "tab_min_open": 8,
         "liveliness_enabled": True,
@@ -35,6 +36,7 @@ def test_dialog_reflects_current_config(qapp):
     dialog.scale.setValue(2.1)
     dialog.activity_enabled.setChecked(False)
     dialog.tab_hints_enabled.setChecked(False)
+    dialog.tab_review_enabled.setChecked(False)
     dialog.tab_idle_minutes.setValue(75)
     dialog.tab_min_open.setValue(10)
     dialog.liveliness_enabled.setChecked(False)
@@ -58,6 +60,7 @@ def test_dialog_reflects_current_config(qapp):
         "ollama_model": "llama3.2",
         "activity_enabled": False,
         "tab_hints_enabled": False,
+        "tab_review_enabled": False,
         "tab_idle_minutes": 75,
         "tab_min_open": 10,
         "liveliness_enabled": False,

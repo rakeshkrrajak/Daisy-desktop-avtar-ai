@@ -180,6 +180,8 @@ class SettingsDialog(QDialog):
         self.activity_enabled.setChecked(cfg["activity_enabled"])
         self.tab_hints_enabled = QCheckBox("Suggest closing stale browser tabs")
         self.tab_hints_enabled.setChecked(cfg["tab_hints_enabled"])
+        self.tab_review_enabled = QCheckBox("Walk me through stale tabs")
+        self.tab_review_enabled.setChecked(cfg["tab_review_enabled"])
         self.tab_idle_minutes = QSpinBox()
         self.tab_idle_minutes.setRange(5, 1440)
         self.tab_idle_minutes.setSuffix(" min")
@@ -216,6 +218,7 @@ class SettingsDialog(QDialog):
         form.addRow("Ollama model", self.ollama_model)
         form.addRow(self.activity_enabled)
         form.addRow(self.tab_hints_enabled)
+        form.addRow(self.tab_review_enabled)
         form.addRow("Stale tab age", self.tab_idle_minutes)
         form.addRow("Minimum browser windows", self.tab_min_open)
         form.addRow(self.liveliness_enabled)
@@ -295,6 +298,7 @@ class SettingsDialog(QDialog):
             "ollama_model": self.ollama_model.text().strip(),
             "activity_enabled": self.activity_enabled.isChecked(),
             "tab_hints_enabled": self.tab_hints_enabled.isChecked(),
+            "tab_review_enabled": self.tab_review_enabled.isChecked(),
             "tab_idle_minutes": self.tab_idle_minutes.value(),
             "tab_min_open": self.tab_min_open.value(),
             "liveliness_enabled": self.liveliness_enabled.isChecked(),

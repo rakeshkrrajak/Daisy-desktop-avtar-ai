@@ -35,6 +35,7 @@ DEFAULTS = {
     "liveliness_enabled": True,
     "liveliness_min_seconds": 45,
     "liveliness_max_seconds": 150,
+    "tab_review_enabled": True,
 }
 
 MAX_CUSTOM_REMINDER_TEXT_LENGTH = 200
@@ -122,6 +123,7 @@ def _valid_value(key: str, value: Any) -> bool:
         "activity_enabled",
         "tab_hints_enabled",
         "liveliness_enabled",
+        "tab_review_enabled",
     }:
         return isinstance(value, bool)
     if key == "ollama_url":

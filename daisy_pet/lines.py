@@ -62,6 +62,10 @@ STALE_TAB_PREFIXES = (
     "Untouched for {age}: {titles}. Close a few?",
     "These tabs have been waiting {age}: {titles}. Close a few?",
 )
+TAB_REVIEW_DONE_LINES = (
+    "All clear — Daisy will leave those tabs alone for now.",
+    "Review complete. Your browser gets a little breathing room.",
+)
 IDLE_CHATTER = (
     "Just keeping you company.",
     "A tiny Daisy check-in.",
@@ -111,6 +115,18 @@ def stale_tab_line(
     age = f"{minutes} min" if minutes < 60 else f"{minutes // 60}h+"
     line = prefix.format(age=age, titles=", ".join(cleaned))
     return line if len(line) <= 220 else f"{line[:219]}…"
+
+
+def tab_review_line(title: str) -> str:
+    cleaned = re.sub(r"\s+", " ", title).strip()
+    if len(cleaned) > 40:
+        cleaned = f"{cleaned[:39]}…"
+    return f'Close "{cleaned}"? Press Ctrl+W — or Keep it and I\'ll ask tomorrow.'
+
+
+def tab_review_done_line(rng: random.Random | None = None) -> str:
+    chooser = rng or random
+    return chooser.choice(TAB_REVIEW_DONE_LINES)
 
 
 def idle_chatter(rng: random.Random | None = None) -> str:
