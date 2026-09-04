@@ -316,9 +316,7 @@ class DaisyApplication:
                 )
             )
         if self.cfg["tab_review_enabled"]:
-            self._pending_review_tabs = getattr(
-                self.tab_watcher, "last_stale_tabs", snapshot.tabs
-            )
+            self._pending_review_tabs = self.tab_watcher.last_stale_tabs
             self._tab_review_prompt = True
             self.bubble.show_choice(
                 observation.text,
@@ -330,11 +328,7 @@ class DaisyApplication:
             self._show_message(observation.text)
 
     def _tab_review_active(self) -> bool:
-        review = getattr(self, "tab_review", None)
-        return bool(
-            getattr(self, "_tab_review_prompt", False)
-            or (review is not None and review.active)
-        )
+        return self._tab_review_prompt or self.tab_review.active
 
     def _on_bubble_choice(self, choice: str) -> None:
         if self._tab_review_prompt:
@@ -372,6 +366,7 @@ class DaisyApplication:
             self._end_tab_review()
             return
         tabs.focus_tab(current.key)
+        self._tab_review_started_at = datetime.now()
         if current.rect is not None:
             left, top, right, bottom = current.rect
             position = QPoint(
@@ -402,6 +397,7 @@ class DaisyApplication:
             return
         result = self.tab_review.sync(snapshot)
         if result == "closed":
+            self._tab_review_started_at = datetime.now()
             if self.cfg["mood_enabled"]:
                 self._play_mood(
                     mood.MoodDecision("happy", "cheerful", "tab_closed")
@@ -615,6 +611,9 @@ class DaisyApplication:
         self._show_message(lines.ack_line())
 
     def _on_bubble_ignored(self) -> None:
+        if self._tab_review_active():
+            self._cancel_tab_review()
+            return
         if not self.cfg["mood_enabled"]:
             return
         self.mood_state.record_ignored()

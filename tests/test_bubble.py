@@ -72,3 +72,17 @@ def test_choice_bubble_emits_clicked_label(qapp):
     bubble._choice_buttons[1].click()
     assert choices == ["Next"]
     assert not bubble.isVisible()
+
+
+def test_choice_bubble_expiry_emits_ignored(qapp):
+    bubble = SpeechBubble()
+    ignored = []
+    bubble.ignored.connect(lambda: ignored.append(True))
+    bubble.show_choice(
+        "Close this tab?",
+        QRect(100, 100, 192, 208),
+        10,
+        ("Keep it", "Next"),
+    )
+    bubble._expire()
+    assert ignored == [True]

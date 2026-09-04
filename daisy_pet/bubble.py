@@ -37,6 +37,7 @@ class SpeechBubble(QWidget):
         self._choice_layout.setEnabled(False)
         self._hide_timer: QTimer | None = None
         self._actionable = False
+        self._choice_mode = False
         self._clicked = False
 
     def show_message(
@@ -44,6 +45,7 @@ class SpeechBubble(QWidget):
     ) -> None:
         self._clear_choices()
         self._actionable = actionable
+        self._choice_mode = False
         self._clicked = False
         if actionable:
             text = f"{text}\nClick me once you've had a sip"
@@ -60,6 +62,7 @@ class SpeechBubble(QWidget):
         choices: tuple[str, str],
     ) -> None:
         self._actionable = False
+        self._choice_mode = True
         self._clicked = False
         self._label.setText(text)
         self._label.adjustSize()
@@ -124,7 +127,15 @@ class SpeechBubble(QWidget):
     def _expire(self) -> None:
         if self._actionable and not self._clicked:
             self.ignored.emit()
+        elif self._choice_mode:
+            self.ignored.emit()
+        self._choice_mode = False
         self.hide()
+
+    def hide(self) -> None:
+        if self._hide_timer is not None:
+            self._hide_timer.stop()
+        super().hide()
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import random
 from types import SimpleNamespace
 
@@ -22,6 +22,8 @@ def test_water_walk_plays_mood_after_sip(monkeypatch, qapp):
         "walk_crossing_seconds": 8,
         "walk_drink_fraction": 0.4,
     }
+    app._tab_review_prompt = False
+    app.tab_review = SimpleNamespace(active=False)
     app.pet = SimpleNamespace(
         isVisible=lambda: True,
         start_sip=lambda duration: events.append(("sip", duration)),
@@ -139,6 +141,8 @@ def test_liveliness_timer_is_gated_by_context(monkeypatch):
         "liveliness_min_seconds": 45,
         "liveliness_max_seconds": 150,
     }
+    app._tab_review_prompt = False
+    app.tab_review = SimpleNamespace(active=False)
     app.walker = SimpleNamespace(busy=False)
     app.pet = SimpleNamespace(
         isVisible=lambda: True,
@@ -244,3 +248,66 @@ def test_due_reminder_cancels_review_and_restores_position():
     assert positions == [QPoint(10, 20)]
     assert fired == [True]
     assert not app.tab_review.active
+
+
+def test_review_timeout_resets_after_closed_step(monkeypatch):
+    app = DaisyApplication.__new__(DaisyApplication)
+    app.cfg = {"mood_enabled": False}
+    app.tab_review = SimpleNamespace(
+        active=True,
+        sync=lambda snapshot: "closed",
+    )
+    app.tab_review_timer = SimpleNamespace(stop=lambda: None)
+    app._tab_review_started_at = datetime.now() - timedelta(seconds=59)
+    app._present_tab_review = lambda: None
+    monkeypatch.setattr(
+        "daisy_pet.app.tabs.probe_tabs",
+        lambda: TabSnapshot((), datetime.now(), "windows"),
+    )
+
+    before = app._tab_review_started_at
+    app._poll_tab_review()
+
+    assert app._tab_review_started_at > before
+
+
+def test_review_bubble_expiry_cancels_and_restores_position():
+    app = DaisyApplication.__new__(DaisyApplication)
+    app.cfg = {}
+    app.tab_review = SimpleNamespace(
+        active=True,
+        cancel=lambda: setattr(app.tab_review, "active", False),
+    )
+    app._tab_review_prompt = False
+    app._pending_review_tabs = ()
+    app._tab_review_position = QPoint(10, 20)
+    app._tab_review_started_at = datetime.now()
+    app.tab_review_timer = SimpleNamespace(stop=lambda: None)
+    positions = []
+    app.pet = SimpleNamespace(
+        move=lambda position: positions.append(position),
+        isVisible=lambda: True,
+        play=lambda *a, **k: None,
+    )
+    app.bubble = SimpleNamespace(hide=lambda: None)
+
+    app._on_bubble_ignored()
+
+    assert positions == [QPoint(10, 20)]
+    assert not app.tab_review.active
+    assert app._tab_review_started_at is None
+
+
+def test_bubble_expiry_outside_review_records_ignored(monkeypatch):
+    app = DaisyApplication.__new__(DaisyApplication)
+    app.cfg = {"mood_enabled": True}
+    app.tab_review = SimpleNamespace(active=False)
+    app._tab_review_prompt = False
+    app.mood_state = SimpleNamespace(record_ignored=lambda: setattr(
+        app.mood_state, "ignored", True
+    ))
+    monkeypatch.setattr("daisy_pet.app.mood.save", lambda state: None)
+
+    app._on_bubble_ignored()
+
+    assert app.mood_state.ignored is True
