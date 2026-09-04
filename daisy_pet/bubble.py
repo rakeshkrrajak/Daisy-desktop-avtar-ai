@@ -3,7 +3,6 @@ from PySide6.QtGui import (
     QColor,
     QFont,
     QGuiApplication,
-    QLinearGradient,
     QPainter,
     QPainterPath,
     QPen,
@@ -17,8 +16,13 @@ from PySide6.QtWidgets import (
 )
 
 
-TAIL_HEIGHT = 14
-LUMP_INSET = 11
+TAIL_HEIGHT = 20
+LUMP_INSET = 12
+SHADOW_OFFSET = 6
+FILL = "#8ed8f8"
+OUTLINE = "#2f8fc4"
+SHADOW = "#1c7bab"
+INK = "#0d3b52"
 
 
 class SpeechBubble(QWidget):
@@ -38,10 +42,12 @@ class SpeechBubble(QWidget):
         self._label.setWordWrap(True)
         self._label.setAttribute(Qt.WA_TransparentForMouseEvents)
         self._label.setFixedWidth(236)
-        self._label.setStyleSheet("color: #17202a; background: transparent;")
+        self._label.setStyleSheet(f"color: {INK}; background: transparent;")
         self._label.setFont(QFont("Segoe UI", 10))
         self._layout = QVBoxLayout(self)
-        self._layout.setContentsMargins(18, 16, 18, 16)
+        self._layout.setContentsMargins(
+            20, 18, 20 + SHADOW_OFFSET, 18 + SHADOW_OFFSET
+        )
         self._layout.addWidget(self._label)
         self._choice_layout = QHBoxLayout()
         self._layout.addLayout(self._choice_layout)
@@ -83,8 +89,9 @@ class SpeechBubble(QWidget):
         for choice in choices:
             button = QPushButton(choice, self)
             button.setStyleSheet(
-                "color: #17202a; background: #e8f0f7; "
-                "border: 1px solid #b7c9d6; border-radius: 5px; padding: 4px 8px;"
+                f"color: {INK}; background: #ffffff; "
+                f"border: 2px solid {OUTLINE}; border-radius: 9px; "
+                "padding: 5px 10px; font-weight: bold;"
             )
             button.clicked.connect(
                 lambda _checked=False, label=choice: self._choose(label)
@@ -114,7 +121,7 @@ class SpeechBubble(QWidget):
         x = max(area.left() + 4, min(x, area.right() - self.width() - 4))
         above = near.top() - self.height() - 8
         self._tail_below = above < area.top()
-        left, top, right, bottom = 18, 16, 18, 16
+        left, top, right, bottom = 20, 18, 20 + SHADOW_OFFSET, 18 + SHADOW_OFFSET
         if self._tail_below:
             top += TAIL_HEIGHT
         else:
@@ -171,37 +178,51 @@ class SpeechBubble(QWidget):
         body = QRectF(
             LUMP_INSET,
             body_top,
-            self.width() - 2 * LUMP_INSET,
-            body_bottom - body_top,
+            self.width() - 2 * LUMP_INSET - SHADOW_OFFSET,
+            body_bottom - body_top - SHADOW_OFFSET,
         )
         path = QPainterPath()
-        path.addRoundedRect(body, 14, 14)
+        path.addRoundedRect(body, 16, 16)
         for index in range(4):
             center_x = body.left() + body.width() * (index + 0.5) / 4
-            path = path.united(self._lump(center_x, body.top(), 21, 14))
-            path = path.united(self._lump(center_x, body.bottom(), 21, 14))
+            path = path.united(self._lump(center_x, body.top(), 22, 15))
+            path = path.united(self._lump(center_x, body.bottom(), 22, 15))
         for index in range(2):
             center_y = body.top() + body.height() * (index + 0.5) / 2
-            path = path.united(self._lump(body.left(), center_y, 13, 17))
-            path = path.united(self._lump(body.right(), center_y, 13, 17))
+            path = path.united(self._lump(body.left(), center_y, 14, 18))
+            path = path.united(self._lump(body.right(), center_y, 14, 18))
         path = path.united(self._tail(body, height))
 
-        gradient = QLinearGradient(0, 0, 0, height)
-        gradient.setColorAt(0, QColor("#ffffff"))
-        gradient.setColorAt(1, QColor("#dcecfa"))
-        painter.setPen(QPen(QColor("#5b9bd5"), 2))
-        painter.setBrush(gradient)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(SHADOW))
+        painter.drawPath(path.translated(SHADOW_OFFSET, SHADOW_OFFSET))
+        painter.setPen(QPen(QColor(OUTLINE), 4))
+        painter.setBrush(QColor(FILL))
         painter.drawPath(path)
+        self._paint_highlights(painter, body)
+
+    @staticmethod
+    def _paint_highlights(painter: QPainter, body: QRectF) -> None:
+        """Comic-style crescent glints inside the top-left of the cloud."""
+        painter.setBrush(Qt.NoBrush)
+        glint = QPen(QColor("#ffffff"), 4)
+        glint.setCapStyle(Qt.RoundCap)
+        painter.setPen(glint)
+        long_arc = QRectF(body.left() + 4, body.top() - 6, 74, 46)
+        painter.drawArc(long_arc, 120 * 16, 70 * 16)
+        short_arc = QRectF(body.left() + 70, body.top() - 12, 52, 40)
+        painter.drawArc(short_arc, 95 * 16, 45 * 16)
 
     def _tail(self, body: QRectF, height: float) -> QPainterPath:
         center_x = body.center().x()
         if self._tail_below:
-            base_y, tip_y = body.top() + 6, 3.0
+            base_y, tip_y = body.top() + 8, 4.0
         else:
-            base_y, tip_y = body.bottom() - 6, height - 3
+            base_y, tip_y = body.bottom() - 8, height - SHADOW_OFFSET - 4
         path = QPainterPath()
-        path.moveTo(center_x - 13, base_y)
-        path.quadTo(center_x - 4, tip_y, center_x + 11, base_y)
+        path.moveTo(center_x - 26, base_y)
+        path.quadTo(center_x - 20, tip_y, center_x - 2, tip_y)
+        path.quadTo(center_x - 6, base_y + (10 if self._tail_below else -10), center_x + 12, base_y)
         path.closeSubpath()
         return path
 
