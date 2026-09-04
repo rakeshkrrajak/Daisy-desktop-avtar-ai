@@ -18,6 +18,8 @@ class TabInfo:
     title: str
     browser: str
     active: bool
+    window_id: int = 0
+    rect: tuple[int, int, int, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -51,9 +53,16 @@ def _probe_uia(
                         selected = bool(element.GetCurrentPropertyValue(30079))
                     except (AttributeError, OSError, TypeError):
                         selected = index == 0
-                    result.append(_tab_info(
-                        window_id, title, browser, selected, foreground
-                    ))
+                    result.append(
+                        _tab_info(
+                            window_id,
+                            title,
+                            browser,
+                            selected,
+                            foreground,
+                            _element_rect(element),
+                        )
+                    )
             except (AttributeError, OSError, TypeError):
                 continue
         if result:
@@ -69,13 +78,66 @@ def _tab_info(
     browser: str,
     selected: bool,
     foreground: int,
+    rect: tuple[int, int, int, int] | None = None,
 ) -> TabInfo:
     return TabInfo(
         f"{window_id}:{title}",
         title,
         browser,
         selected and window_id == foreground,
+        window_id,
+        rect,
     )
+
+
+def _element_rect(element) -> tuple[int, int, int, int] | None:
+    try:
+        value = element.CurrentBoundingRectangle
+        return (
+            int(value.left),
+            int(value.top),
+            int(value.right),
+            int(value.bottom),
+        )
+    except Exception:
+        return None
+
+
+def focus_tab(key: str) -> bool:
+    if sys.platform != "win32":
+        return False
+    try:
+        import comtypes.client
+
+        automation = comtypes.client.CreateObject(
+            "UIAutomationClient.CUIAutomation"
+        )
+        condition = automation.CreatePropertyCondition(30003, 50019)
+        user32 = ctypes.windll.user32
+        for window_id, _window_title, browser in activity.browser_windows():
+            try:
+                root = automation.ElementFromHandle(window_id)
+                elements = root.FindAll(4, condition)
+                for index in range(elements.Length):
+                    element = elements.GetElement(index)
+                    title = str(element.CurrentName or "")
+                    if not title:
+                        continue
+                    candidate = _tab_info(
+                        window_id, title, browser, False, window_id
+                    )
+                    if candidate.key != key:
+                        continue
+                    if not user32.SetForegroundWindow(window_id):
+                        return False
+                    pattern = element.GetCurrentPattern(10010)
+                    pattern.Select()
+                    return True
+            except Exception:
+                continue
+    except Exception:
+        return False
+    return False
 
 
 def probe_tabs() -> TabSnapshot | None:
@@ -93,7 +155,13 @@ def probe_tabs() -> TabSnapshot | None:
             return uia
         return TabSnapshot(
             tuple(
-                TabInfo(f"{window_id}:{title}", title, browser, window_id == foreground)
+                TabInfo(
+                    f"{window_id}:{title}",
+                    title,
+                    browser,
+                    window_id == foreground,
+                    window_id,
+                )
                 for window_id, title, browser in windows
             ),
             now,
@@ -120,6 +188,7 @@ class TabWatcher:
         self.last_active: dict[str, datetime] = {}
         self._last_mentioned: dict[str, datetime] = {}
         self._last_emit: datetime | None = None
+        self.last_stale_tabs: tuple[TabInfo, ...] = ()
 
     def observe(self, snapshot: TabSnapshot) -> activity.Observation | None:
         current_keys = {tab.key for tab in snapshot.tabs}
@@ -157,6 +226,7 @@ class TabWatcher:
             and snapshot.at - self._last_emit < self.cooldown
         ):
             return None
+        self.last_stale_tabs = tuple(stale)
         if len(stale) > 2:
             chooser = self.rng or random
             chosen_tabs = chooser.sample(stale, 2)
