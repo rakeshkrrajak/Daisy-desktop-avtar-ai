@@ -205,6 +205,31 @@ def test_activity_and_scale_defaults_and_validation(tmp_path):
     assert load(path)["scale"] == DEFAULTS["scale"]
 
 
+def test_tab_and_liveliness_defaults_and_validation(tmp_path):
+    path = tmp_path / "config.json"
+    cfg = load(path)
+    assert cfg["tab_hints_enabled"] is True
+    assert cfg["tab_idle_minutes"] == 60
+    assert cfg["tab_min_open"] == 8
+    assert cfg["liveliness_enabled"] is True
+    assert cfg["liveliness_min_seconds"] == 45
+    assert cfg["liveliness_max_seconds"] == 150
+    path.write_text(
+        json.dumps(
+            {
+                "tab_hints_enabled": "yes",
+                "tab_idle_minutes": 4,
+                "tab_min_open": 0,
+                "liveliness_enabled": "yes",
+                "liveliness_min_seconds": 9,
+                "liveliness_max_seconds": 9,
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert load(path) == DEFAULTS
+
+
 def test_non_local_ollama_url_is_rejected(tmp_path):
     path = tmp_path / "config.json"
     path.write_text(

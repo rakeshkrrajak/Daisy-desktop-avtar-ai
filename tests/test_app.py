@@ -1,9 +1,12 @@
 from datetime import datetime
+import random
 from types import SimpleNamespace
 
 from daisy_pet.activity import ActivitySnapshot, Observation, WindowInfo
 from daisy_pet.app import DaisyApplication, SIP_DURATION_MS
+from daisy_pet.liveliness import Behaviour
 from daisy_pet.mood import MoodDecision
+from daisy_pet.tabs import TabInfo, TabSnapshot
 
 
 def test_water_walk_plays_mood_after_sip(monkeypatch, qapp):
@@ -79,3 +82,95 @@ def test_activity_poll_is_gated(monkeypatch, qapp):
     app.walker.busy = True
     app._poll_activity()
     assert shown == []
+
+
+def test_tab_poll_is_gated(monkeypatch):
+    shown = []
+    app = DaisyApplication.__new__(DaisyApplication)
+    app.cfg = {
+        "tab_hints_enabled": True,
+        "enabled": True,
+        "schedule_enabled": False,
+        "mood_enabled": True,
+    }
+    app.walker = SimpleNamespace(busy=False)
+    app.bubble = SimpleNamespace(isVisible=lambda: False)
+    app.tab_watcher = SimpleNamespace(observe=lambda value: Observation(
+        "stale_tabs", "Close these?", "firm"
+    ))
+    app._schedule_active = lambda: True
+    app._show_message = lambda text: shown.append(text)
+    app._play_mood = lambda decision: None
+    monkeypatch.setattr(
+        "daisy_pet.app.tabs.probe_tabs",
+        lambda: TabSnapshot(
+            (TabInfo("1:x", "x", "chrome.exe", False),),
+            datetime.now(),
+            "windows",
+        ),
+    )
+
+    app.cfg["enabled"] = False
+    app._poll_tabs()
+    app.cfg["enabled"] = True
+    app._schedule_active = lambda: False
+    app._poll_tabs()
+    app._schedule_active = lambda: True
+    app.walker.busy = True
+    app._poll_tabs()
+    app.walker.busy = False
+    app.bubble = SimpleNamespace(isVisible=lambda: True)
+    app._poll_tabs()
+    assert shown == []
+
+
+def test_liveliness_timer_is_gated_by_context(monkeypatch):
+    shown = []
+    played = []
+    app = DaisyApplication.__new__(DaisyApplication)
+    app.cfg = {
+        "liveliness_enabled": True,
+        "enabled": True,
+        "schedule_enabled": False,
+        "liveliness_min_seconds": 45,
+        "liveliness_max_seconds": 150,
+    }
+    app.walker = SimpleNamespace(busy=False)
+    app.pet = SimpleNamespace(
+        isVisible=lambda: True,
+        play=lambda *args, **kwargs: played.append(args),
+    )
+    app.bubble = SimpleNamespace(isVisible=lambda: False)
+    app.sprites = SimpleNamespace(has_custom_state=lambda state: False)
+    app._schedule_active = lambda: True
+    app._show_message = lambda text: shown.append(text)
+    app._liveliness_rng = random.Random(1)
+    app._liveliness_last_name = None
+    app._last_liveliness_chatter_at = None
+    app.liveliness_timer = SimpleNamespace(start=lambda value: None)
+    app.latest_activity_snapshot = ActivitySnapshot(
+        WindowInfo("Microsoft Teams meeting", "teams.exe"),
+        0,
+        0,
+        datetime.now(),
+    )
+    monkeypatch.setattr(
+        "daisy_pet.app.liveliness.pick",
+        lambda hour, rng, last: Behaviour("test", "happy", "waving", 1, False),
+    )
+    app._on_liveliness_timer()
+    assert played == []
+
+    app.latest_activity_snapshot = ActivitySnapshot(
+        WindowInfo("Editor", "code.exe"),
+        15 * 60,
+        0,
+        datetime.now(),
+    )
+    app._on_liveliness_timer()
+    assert played == []
+
+    app.latest_activity_snapshot = None
+    app.cfg["enabled"] = False
+    app._on_liveliness_timer()
+    assert played == []
