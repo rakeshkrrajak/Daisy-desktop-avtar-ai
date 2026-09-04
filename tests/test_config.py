@@ -35,12 +35,20 @@ def test_bad_types_and_unknown_keys_fall_back_or_drop(tmp_path):
                 "schedule_start": "25:99",
                 "schedule_end": 100,
                 "custom_reminders": "not-a-list",
+                "tab_review_enabled": "yes",
                 "extra": "discard me",
             }
         ),
         encoding="utf-8",
     )
     assert load(path) == DEFAULTS
+
+
+def test_tab_review_default_and_validation(tmp_path):
+    path = tmp_path / "config.json"
+    assert load(path)["tab_review_enabled"] is True
+    path.write_text(json.dumps({"tab_review_enabled": "yes"}), encoding="utf-8")
+    assert load(path)["tab_review_enabled"] is True
 
 
 def test_walk_and_schedule_roundtrip(tmp_path):

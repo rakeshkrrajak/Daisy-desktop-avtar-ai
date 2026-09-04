@@ -93,6 +93,8 @@ configure:
   activity and offer occasional comments.
 - **Stale browser-tab hints** — set the minimum age and browser-window count
   before Daisy suggests closing old tabs.
+- **Walk me through stale tabs** — let Daisy guide you through each stale tab
+  so you can choose whether to keep it or close it.
 - **Lifelike idle behaviour** — let Daisy occasionally play a quiet,
   pose-only idle animation. Set the minimum and maximum delay between poses.
 
@@ -167,6 +169,15 @@ dependency. Without it, Daisy falls back to one pseudo-tab per visible
 browser window and counts browser windows rather than exact tabs. Disable
 **Suggest closing stale browser tabs** in **Daisy Settings** to turn this
 feature off.
+
+When **Walk me through stale tabs** is enabled, Daisy offers a **Show me** or
+**Later** choice after a stale-tab hint. With **Show me**, she walks to each
+stale tab, points it out, and offers **Keep it** or **Next**. Daisy never
+closes a browser tab herself and never sends a close keystroke; press
+**Ctrl+W** yourself if you want to close the tab. **Keep it** remembers the
+choice until the next day. The keep list stores only a salted-free, truncated
+SHA-256 hash of the normalized title and the date. No plaintext browser titles
+are stored on disk.
 
 ## Lifelike idle behaviour
 

@@ -55,3 +55,20 @@ def test_non_actionable_click_emits_neither(qapp):
     QTest.mousePress(bubble, Qt.MouseButton.LeftButton)
     assert ack == []
     assert ignored == []
+
+
+def test_choice_bubble_emits_clicked_label(qapp):
+    bubble = SpeechBubble()
+    choices = []
+    bubble.chose.connect(choices.append)
+    bubble.show_choice(
+        "Close this tab?",
+        QRect(100, 100, 192, 208),
+        10,
+        ("Keep it", "Next"),
+    )
+    qapp.processEvents()
+    assert len(bubble._choice_buttons) == 2
+    bubble._choice_buttons[1].click()
+    assert choices == ["Next"]
+    assert not bubble.isVisible()

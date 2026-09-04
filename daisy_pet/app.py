@@ -1,12 +1,12 @@
 import random
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Signal
+from PySide6.QtCore import QPoint, QObject, QRunnable, QThreadPool, QTimer, Signal
 from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import QApplication, QDialog
 
-from . import activity, config, liveliness, schedule, tabs
+from . import activity, config, liveliness, schedule, tab_review, tabs
 from .bubble import SpeechBubble
 from .custom_reminders import CustomReminder, CustomReminderStore
 from . import lines, mood, ollama
@@ -47,6 +47,13 @@ class DaisyApplication:
         self.pet = PetWindow(self.sprites)
         self.pet.place_initial(self.cfg["pos"])
         self.bubble = SpeechBubble()
+        self.tab_review = tab_review.TabReview(
+            tab_review.KeepList(), today=date.today()
+        )
+        self._tab_review_prompt = False
+        self._pending_review_tabs: tuple[tabs.TabInfo, ...] = ()
+        self._tab_review_position = None
+        self._tab_review_started_at: datetime | None = None
         self.reminder = WaterReminder(self.cfg["interval_minutes"])
         self.mood_state = mood.load()
         self._last_drag_mood_at = 0.0
@@ -59,6 +66,7 @@ class DaisyApplication:
         self.pet.clicked.connect(self._show_next_reminder)
         self.bubble.acknowledged.connect(self._on_bubble_acknowledged)
         self.bubble.ignored.connect(self._on_bubble_ignored)
+        self.bubble.chose.connect(self._on_bubble_choice)
         self.pet.right_clicked.connect(self._open_pet_menu)
         self.pet.double_clicked.connect(self._vanish_now)
         self.tray = DaisyTray(
@@ -102,6 +110,9 @@ class DaisyApplication:
         self.tab_timer.setInterval(60_000)
         self.tab_timer.timeout.connect(self._poll_tabs)
         self.tab_timer.start()
+        self.tab_review_timer = QTimer()
+        self.tab_review_timer.setSingleShot(False)
+        self.tab_review_timer.timeout.connect(self._poll_tab_review)
         self._liveliness_rng = random.Random()
         self._liveliness_last_name = None
         self._last_liveliness_chatter_at = None
@@ -115,6 +126,8 @@ class DaisyApplication:
         config.save(self.cfg)
 
     def _on_pet_moved(self, position) -> None:
+        if self._tab_review_active():
+            return
         self._save_position(position)
         now = datetime.now().timestamp()
         if self.cfg["mood_enabled"] and now - self._last_drag_mood_at >= 3:
@@ -199,6 +212,7 @@ class DaisyApplication:
         idle, mid-walk, or mid-reminder. She reappears at the next reminder
         (or ambient wander) like she normally would after one finishes.
         """
+        self._cancel_tab_review()
         self.bubble.hide()
         self.pet.stop_walk()
         self.pet.stop_sip()
@@ -227,6 +241,16 @@ class DaisyApplication:
 
     def _poll_reminder(self) -> None:
         self._apply_schedule_visibility()
+        if (
+            self._tab_review_active()
+            and self.cfg["enabled"]
+            and self._schedule_active()
+            and (
+                self.reminder.due()
+                or bool(self.custom_reminders.due_items())
+            )
+        ):
+            self._cancel_tab_review()
         if not self.cfg["enabled"] or self.walker.busy or not self._schedule_active():
             return
         if self.reminder.due():
@@ -274,6 +298,7 @@ class DaisyApplication:
             or not self._schedule_active()
             or self.walker.busy
             or self.bubble.isVisible()
+            or self._tab_review_active()
         ):
             return
         snapshot = tabs.probe_tabs()
@@ -290,7 +315,119 @@ class DaisyApplication:
                     observation.kind,
                 )
             )
-        self._show_message(observation.text)
+        if self.cfg["tab_review_enabled"]:
+            self._pending_review_tabs = getattr(
+                self.tab_watcher, "last_stale_tabs", snapshot.tabs
+            )
+            self._tab_review_prompt = True
+            self.bubble.show_choice(
+                observation.text,
+                self.pet.geometry(),
+                self.cfg["bubble_seconds"],
+                ("Show me", "Later"),
+            )
+        else:
+            self._show_message(observation.text)
+
+    def _tab_review_active(self) -> bool:
+        review = getattr(self, "tab_review", None)
+        return bool(
+            getattr(self, "_tab_review_prompt", False)
+            or (review is not None and review.active)
+        )
+
+    def _on_bubble_choice(self, choice: str) -> None:
+        if self._tab_review_prompt:
+            self._tab_review_prompt = False
+            if choice == "Show me":
+                self._begin_tab_review()
+            else:
+                self._pending_review_tabs = ()
+            return
+        if not self.tab_review.active:
+            return
+        if choice == "Keep it":
+            self.tab_review.keep_current(date.today())
+        elif choice == "Next":
+            self.tab_review.skip_current()
+        else:
+            return
+        self._present_tab_review()
+
+    def _begin_tab_review(self) -> None:
+        self.tab_review.today = date.today()
+        self.tab_review.start(self._pending_review_tabs)
+        self._pending_review_tabs = ()
+        if not self.tab_review.active:
+            self._end_tab_review()
+            return
+        self._tab_review_position = self.pet.pos()
+        self._tab_review_started_at = datetime.now()
+        self.tab_review_timer.start(2000)
+        self._present_tab_review()
+
+    def _present_tab_review(self) -> None:
+        current = self.tab_review.current()
+        if current is None:
+            self._end_tab_review()
+            return
+        tabs.focus_tab(current.key)
+        if current.rect is not None:
+            left, top, right, bottom = current.rect
+            position = QPoint(
+                (left + right) // 2 - self.pet.width() // 2,
+                bottom + 4,
+            )
+            self.pet.move(self.pet.clamp_position(position))
+        self.pet.play("waving", loops=2, then="idle")
+        self.bubble.show_choice(
+            lines.tab_review_line(current.title),
+            self.pet.geometry(),
+            self.cfg["bubble_seconds"],
+            ("Keep it", "Next"),
+        )
+
+    def _poll_tab_review(self) -> None:
+        if not self.tab_review.active:
+            self.tab_review_timer.stop()
+            return
+        if (
+            self._tab_review_started_at is not None
+            and datetime.now() - self._tab_review_started_at >= timedelta(seconds=60)
+        ):
+            self._end_tab_review(silent=True)
+            return
+        snapshot = tabs.probe_tabs()
+        if snapshot is None:
+            return
+        result = self.tab_review.sync(snapshot)
+        if result == "closed":
+            if self.cfg["mood_enabled"]:
+                self._play_mood(
+                    mood.MoodDecision("happy", "cheerful", "tab_closed")
+                )
+            self._present_tab_review()
+        elif result == "done":
+            self._end_tab_review()
+
+    def _end_tab_review(self, silent: bool = False) -> None:
+        self.tab_review.cancel()
+        self._tab_review_prompt = False
+        self._pending_review_tabs = ()
+        self.tab_review_timer.stop()
+        if self._tab_review_position is not None:
+            self.pet.move(self._tab_review_position)
+        self._tab_review_position = None
+        self._tab_review_started_at = None
+        if self.pet.isVisible():
+            self.pet.play("idle")
+        self.bubble.hide()
+        if not silent:
+            self._show_message(lines.tab_review_done_line())
+
+    def _cancel_tab_review(self) -> None:
+        if self._tab_review_active():
+            self._end_tab_review(silent=True)
 
     def _schedule_next_liveliness(self) -> None:
         delay = liveliness.next_delay_seconds(
@@ -309,6 +446,7 @@ class DaisyApplication:
                 and not self.walker.busy
                 and self.pet.isVisible()
                 and not self.bubble.isVisible()
+                and not self._tab_review_active()
             ):
                 snapshot = self.latest_activity_snapshot
                 if snapshot is None or (
@@ -379,6 +517,7 @@ class DaisyApplication:
         self.walker.reminder_walk_out(self.cfg["walk_crossing_seconds"], self.pet.hide)
 
     def _start_water_reminder_walk(self) -> None:
+        self._cancel_tab_review()
         decision = (
             mood.decide(self._signals())
             if self.cfg["mood_enabled"]
@@ -434,11 +573,13 @@ class DaisyApplication:
             and self._schedule_active()
             and not self.walker.busy
             and self.pet.isVisible()
+            and not self._tab_review_active()
         ):
             self.walker.ambient_walk(self.cfg["walk_crossing_seconds"])
         self._schedule_next_ambient_walk()
 
     def drink_now(self, mark: bool = True) -> None:
+        self._cancel_tab_review()
         if not self.pet.isVisible():
             self.pet.show()
         if self.cfg["mood_enabled"]:
@@ -512,6 +653,8 @@ class DaisyApplication:
     def _apply_settings(self, values: dict) -> None:
         old_scale = self.cfg["scale"]
         self.cfg.update(values)
+        if not self.cfg["tab_review_enabled"]:
+            self._cancel_tab_review()
         if self.cfg["scale"] != old_scale:
             self.pet.rescale(self.cfg["scale"])
             self.pet.move(self.pet.clamp_position(self.pet.pos()))
