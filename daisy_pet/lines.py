@@ -59,8 +59,8 @@ OBSERVATION_LINES: dict[str, tuple[str, ...]] = {
     ),
 }
 STALE_TAB_PREFIXES = (
-    'Untouched for {hours}h+: {titles}. Close a few?',
-    'These tabs have been waiting {hours}h+: {titles}. Close a few?',
+    "Untouched for {age}: {titles}. Close a few?",
+    "These tabs have been waiting {age}: {titles}. Close a few?",
 )
 IDLE_CHATTER = (
     "Just keeping you company.",
@@ -96,7 +96,7 @@ def pick_observation(
 
 def stale_tab_line(
     titles: list[str] | tuple[str, ...],
-    hours: int,
+    minutes: int,
     rng: random.Random | None = None,
 ) -> str:
     chooser = rng or random
@@ -107,7 +107,9 @@ def stale_tab_line(
             title = f"{title[:39]}…"
         cleaned.append(f'"{title}"')
     prefix = chooser.choice(STALE_TAB_PREFIXES)
-    line = prefix.format(hours=max(1, hours), titles=", ".join(cleaned))
+    minutes = max(1, int(minutes))
+    age = f"{minutes} min" if minutes < 60 else f"{minutes // 60}h+"
+    line = prefix.format(age=age, titles=", ".join(cleaned))
     return line if len(line) <= 220 else f"{line[:219]}…"
 
 

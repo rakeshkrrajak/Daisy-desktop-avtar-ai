@@ -48,12 +48,12 @@ def _probe_uia(
                     if not title:
                         continue
                     try:
-                        active = bool(element.GetCurrentPropertyValue(30079))
+                        selected = bool(element.GetCurrentPropertyValue(30079))
                     except (AttributeError, OSError, TypeError):
-                        active = window_id == foreground and index == 0
-                    result.append(
-                        TabInfo(f"{window_id}:{title}", title, browser, active)
-                    )
+                        selected = index == 0
+                    result.append(_tab_info(
+                        window_id, title, browser, selected, foreground
+                    ))
             except (AttributeError, OSError, TypeError):
                 continue
         if result:
@@ -61,6 +61,21 @@ def _probe_uia(
     except Exception:
         pass
     return None
+
+
+def _tab_info(
+    window_id: int,
+    title: str,
+    browser: str,
+    selected: bool,
+    foreground: int,
+) -> TabInfo:
+    return TabInfo(
+        f"{window_id}:{title}",
+        title,
+        browser,
+        selected and window_id == foreground,
+    )
 
 
 def probe_tabs() -> TabSnapshot | None:
@@ -142,19 +157,21 @@ class TabWatcher:
             and snapshot.at - self._last_emit < self.cooldown
         ):
             return None
-        age = min(snapshot.at - self.last_active[tab.key] for tab in stale)
-        hours = max(1, int(age.total_seconds() // 3600))
         if len(stale) > 2:
             chooser = self.rng or random
             chosen_tabs = chooser.sample(stale, 2)
         else:
             chosen_tabs = stale
         chosen = [tab.title for tab in chosen_tabs]
+        age = min(
+            snapshot.at - self.last_active[tab.key] for tab in chosen_tabs
+        )
+        minutes = max(1, int(age.total_seconds() // 60))
         self._last_emit = snapshot.at
         for tab in chosen_tabs:
             self._last_mentioned[tab.key] = snapshot.at
         return activity.Observation(
             "stale_tabs",
-            stale_tab_line(chosen, hours, self.rng),
+            stale_tab_line(chosen, minutes, self.rng),
             activity.TONE_FOR_KIND["stale_tabs"],
         )

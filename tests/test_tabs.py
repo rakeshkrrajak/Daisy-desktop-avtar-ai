@@ -74,6 +74,24 @@ def test_stale_line_collapses_truncates_and_caps_titles():
     assert "  " not in line
     assert "…" in line
     assert len(long_title.split()) > 40
+    assert "45 min" in tabs.stale_tab_line(["Short"], 45)
+    assert "2h+" in tabs.stale_tab_line(["Short"], 120)
+    watcher = tabs.TabWatcher(idle_minutes=5, min_open=1)
+    start = datetime(2025, 1, 1, 9)
+    entry = ("1:Short", "Short", "chrome.exe", False)
+    watcher.observe(snapshot(start, [entry]))
+    observation = watcher.observe(
+        snapshot(start + timedelta(minutes=45), [entry])
+    )
+    assert observation is not None
+    assert "45 min" in observation.text
+
+
+def test_selected_background_tab_is_not_active():
+    background = tabs._tab_info(2, "Background", "chrome.exe", True, 1)
+    foreground = tabs._tab_info(1, "Foreground", "chrome.exe", True, 1)
+    assert background.active is False
+    assert foreground.active is True
 
 
 def test_probe_tabs_returns_none_off_windows(monkeypatch):
