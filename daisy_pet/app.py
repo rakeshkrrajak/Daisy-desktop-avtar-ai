@@ -2,7 +2,15 @@ import random
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from PySide6.QtCore import QPoint, QObject, QRunnable, QThreadPool, QTimer, Signal
+from PySide6.QtCore import (
+    QPoint,
+    QRect,
+    QObject,
+    QRunnable,
+    QThreadPool,
+    QTimer,
+    Signal,
+)
 from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import QApplication, QDialog
 
@@ -54,6 +62,7 @@ class DaisyApplication:
         self._pending_review_tabs: tuple[tabs.TabInfo, ...] = ()
         self._tab_review_position = None
         self._tab_review_started_at: datetime | None = None
+        self._reminder_choice_active = False
         self.reminder = WaterReminder(self.cfg["interval_minutes"])
         self.mood_state = mood.load()
         self._last_drag_mood_at = 0.0
@@ -135,6 +144,7 @@ class DaisyApplication:
             self._play_mood(mood.decide(self._signals(just_dragged=True)))
 
     def _show_message(self, text: str, actionable: bool = False) -> None:
+        self._abandon_reminder_choice()
         self._bubble_generation += 1
         self.bubble.show_message(
             text,
@@ -171,8 +181,31 @@ class DaisyApplication:
         self.pet.play(state, loops=1, then="idle")
 
     def _show_reminder_line(self, line: str, tone: str, actionable: bool = True) -> None:
+        self._abandon_reminder_choice()
         self._show_message(line, actionable=actionable)
         if not self.cfg["ollama_enabled"]:
+            return
+        generation = self._bubble_generation
+        worker = _OllamaWorker(
+            ollama.build_prompt(tone, 0),
+            self.cfg["ollama_model"],
+            self.cfg["ollama_url"],
+        )
+        worker.signals.finished.connect(
+            lambda result, token=generation: self._replace_ollama_line(result, token)
+        )
+        QThreadPool.globalInstance().start(worker)
+
+    def _show_reminder_choice(self, line: str, tone: str | None) -> None:
+        self._bubble_generation += 1
+        self._reminder_choice_active = True
+        self.bubble.show_choice(
+            line,
+            self.pet.geometry(),
+            self.cfg["reminder_wait_seconds"],
+            ("I drank it", "Snooze 5 min"),
+        )
+        if tone is None or not self.cfg["ollama_enabled"]:
             return
         generation = self._bubble_generation
         worker = _OllamaWorker(
@@ -188,6 +221,15 @@ class DaisyApplication:
     def _replace_ollama_line(self, text: str, generation: int) -> None:
         if generation == self._bubble_generation and self.bubble.isVisible():
             self.bubble.set_message_text(text)
+
+    def _abandon_reminder_choice(self) -> None:
+        if not self._reminder_choice_active:
+            return
+        self._reminder_choice_active = False
+        if self.cfg["mood_enabled"]:
+            self.mood_state.record_ignored()
+            mood.save(self.mood_state)
+        self._finish_reminder_walk()
 
     def _open_pet_menu(self) -> None:
         self.tray.menu.popup(QCursor.pos())
@@ -316,6 +358,7 @@ class DaisyApplication:
                 )
             )
         if self.cfg["tab_review_enabled"]:
+            self._abandon_reminder_choice()
             self._pending_review_tabs = self.tab_watcher.last_stale_tabs
             self._tab_review_prompt = True
             self.bubble.show_choice(
@@ -331,6 +374,32 @@ class DaisyApplication:
         return self._tab_review_prompt or self.tab_review.active
 
     def _on_bubble_choice(self, choice: str) -> None:
+        if self._reminder_choice_active:
+            self._reminder_choice_active = False
+            if choice == "I drank it":
+                if self.cfg["mood_enabled"]:
+                    self.mood_state.record_ack(datetime.now())
+                    mood.save(self.mood_state)
+                    self._play_mood(
+                        mood.decide(self._signals(just_acknowledged=True))
+                    )
+                    self._show_message(lines.ack_line())
+                else:
+                    self._show_message(lines.water_ack_line())
+            elif choice == "Snooze 5 min":
+                self.reminder.snooze(5)
+                if self.cfg["mood_enabled"]:
+                    self.mood_state.record_snooze()
+                    mood.save(self.mood_state)
+                    decision = mood.decide(
+                        self._signals(just_snoozed=True)
+                    )
+                    self._play_mood(decision)
+                    self._show_message(lines.pick_line(decision.tone))
+                else:
+                    self._show_message(lines.snooze_line(5))
+            QTimer.singleShot(1200, self._finish_reminder_walk)
+            return
         if self._tab_review_prompt:
             self._tab_review_prompt = False
             if choice == "Show me":
@@ -373,11 +442,15 @@ class DaisyApplication:
                 (left + right) // 2 - self.pet.width() // 2,
                 bottom + 4,
             )
-            self.pet.move(self.pet.clamp_position(position))
+            clamped = self.pet.clamp_position(position)
+            self.pet.move(clamped)
+            anchor = QRect(clamped, self.pet.size())
+        else:
+            anchor = self.pet.geometry()
         self.pet.play("waving", loops=2, then="idle")
         self.bubble.show_choice(
             lines.tab_review_line(current.title),
-            self.pet.geometry(),
+            anchor,
             self.cfg["bubble_seconds"],
             ("Keep it", "Next"),
         )
@@ -485,6 +558,7 @@ class DaisyApplication:
         act_it_out,
         actionable: bool = False,
         tone: str | None = None,
+        wait_for_choice: bool = False,
     ) -> None:
         """Shared walk-in/pause/walk-out cinematic for any reminder kind.
 
@@ -497,20 +571,26 @@ class DaisyApplication:
 
         def at_point() -> None:
             act_it_out()
-            if tone is None:
+            if wait_for_choice:
+                self._show_reminder_choice(message, tone)
+            elif tone is None:
                 self._show_message(message, actionable=actionable)
             else:
                 self._show_reminder_line(message, tone, actionable)
-            QTimer.singleShot(
-                max(1, self.cfg["bubble_seconds"]) * 1000, self._finish_reminder_walk
-            )
+            if not wait_for_choice:
+                QTimer.singleShot(
+                    max(1, self.cfg["bubble_seconds"]) * 1000,
+                    self._finish_reminder_walk,
+                )
 
         self.walker.reminder_walk_in(crossing, fraction, at_point)
 
     def _finish_reminder_walk(self) -> None:
         if not self.pet.isVisible():
             return  # already dismissed (e.g. double-click vanish) — nothing to finish
-        self.walker.reminder_walk_out(self.cfg["walk_crossing_seconds"], self.pet.hide)
+        self.walker.reminder_walk_out(
+            self.cfg["walk_crossing_seconds"], self.pet.hide, to_right=True
+        )
 
     def _start_water_reminder_walk(self) -> None:
         self._cancel_tab_review()
@@ -538,8 +618,8 @@ class DaisyApplication:
         self._start_reminder_walk(
             line,
             act_it_out,
-            actionable=self.cfg["mood_enabled"],
             tone=decision.tone if decision is not None else None,
+            wait_for_choice=True,
         )
 
     def _start_custom_reminder_walk(self, item: CustomReminder) -> None:
@@ -611,6 +691,9 @@ class DaisyApplication:
         self._show_message(lines.ack_line())
 
     def _on_bubble_ignored(self) -> None:
+        if self._reminder_choice_active:
+            self._abandon_reminder_choice()
+            return
         if self._tab_review_active():
             self._cancel_tab_review()
             return

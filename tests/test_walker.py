@@ -71,8 +71,8 @@ def test_reminder_walk_in_stops_at_drink_fraction_then_out(qapp, sheet):
     assert pet.x() == expected_drink_x
 
     exited = []
-    walker.reminder_walk_out(0.2, lambda: exited.append(True))
+    walker.reminder_walk_out(0.2, lambda: exited.append(True), to_right=True)
     assert _wait_until(lambda: exited)
     assert not walker.busy
-    assert pet.x() == area.left() - 24
-    assert pet.state == "running-left"
+    assert pet.x() == area.right() + 24
+    assert pet.state == "running-right"

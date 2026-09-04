@@ -36,6 +36,7 @@ def test_bad_types_and_unknown_keys_fall_back_or_drop(tmp_path):
                 "schedule_end": 100,
                 "custom_reminders": "not-a-list",
                 "tab_review_enabled": "yes",
+                "reminder_wait_seconds": 14,
                 "extra": "discard me",
             }
         ),
@@ -49,6 +50,19 @@ def test_tab_review_default_and_validation(tmp_path):
     assert load(path)["tab_review_enabled"] is True
     path.write_text(json.dumps({"tab_review_enabled": "yes"}), encoding="utf-8")
     assert load(path)["tab_review_enabled"] is True
+
+
+def test_reminder_wait_seconds_default_and_validation(tmp_path):
+    path = tmp_path / "config.json"
+    assert load(path)["reminder_wait_seconds"] == 120
+    path.write_text(
+        json.dumps({"reminder_wait_seconds": 14}), encoding="utf-8"
+    )
+    assert load(path)["reminder_wait_seconds"] == 120
+    path.write_text(
+        json.dumps({"reminder_wait_seconds": 601}), encoding="utf-8"
+    )
+    assert load(path)["reminder_wait_seconds"] == 120
 
 
 def test_walk_and_schedule_roundtrip(tmp_path):

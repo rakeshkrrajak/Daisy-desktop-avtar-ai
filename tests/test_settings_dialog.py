@@ -9,6 +9,7 @@ def test_dialog_reflects_current_config(qapp):
     cfg = {
         **DEFAULTS,
         "interval_minutes": 5,
+        "reminder_wait_seconds": 120,
         "walk_enabled": False,
         "walk_drink_fraction": 0.4,
         "ambient_walk_min_minutes": 4,
@@ -33,6 +34,8 @@ def test_dialog_reflects_current_config(qapp):
         "scale": 1.5,
     }
     dialog = SettingsDialog(cfg)
+    assert dialog.reminder_wait_seconds.value() == 120
+    dialog.reminder_wait_seconds.setValue(240)
     dialog.scale.setValue(2.1)
     dialog.activity_enabled.setChecked(False)
     dialog.tab_hints_enabled.setChecked(False)
@@ -44,6 +47,7 @@ def test_dialog_reflects_current_config(qapp):
     dialog.liveliness_max_seconds.setValue(120)
     assert dialog.values() == {
         "interval_minutes": 5,
+        "reminder_wait_seconds": 240,
         "scale": 2.1,
         "walk_enabled": False,
         "walk_drink_fraction": 0.4,

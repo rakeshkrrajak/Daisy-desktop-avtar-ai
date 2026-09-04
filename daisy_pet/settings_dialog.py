@@ -128,6 +128,11 @@ class SettingsDialog(QDialog):
         self.interval_minutes.setSuffix(" min")
         self.interval_minutes.setValue(cfg["interval_minutes"])
 
+        self.reminder_wait_seconds = QSpinBox()
+        self.reminder_wait_seconds.setRange(15, 600)
+        self.reminder_wait_seconds.setSuffix(" sec")
+        self.reminder_wait_seconds.setValue(cfg["reminder_wait_seconds"])
+
         self.scale = QDoubleSpinBox()
         self.scale.setRange(0.5, 3.0)
         self.scale.setSingleStep(0.1)
@@ -203,6 +208,7 @@ class SettingsDialog(QDialog):
 
         form = QFormLayout()
         form.addRow("Remind me to drink every", self.interval_minutes)
+        form.addRow("Wait for my answer (seconds)", self.reminder_wait_seconds)
         form.addRow("Daisy size", self.scale)
         form.addRow(self.walk_enabled)
         form.addRow("Act like drinking at", self.drink_fraction_percent)
@@ -282,6 +288,7 @@ class SettingsDialog(QDialog):
         ambient_max = max(ambient_min, self.ambient_max.value())
         return {
             "interval_minutes": self.interval_minutes.value(),
+            "reminder_wait_seconds": self.reminder_wait_seconds.value(),
             "scale": self.scale.value(),
             "walk_enabled": self.walk_enabled.isChecked(),
             "walk_drink_fraction": self.drink_fraction_percent.value() / 100.0,
