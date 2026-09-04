@@ -45,7 +45,9 @@ class DaisyApplication:
         sheet_path = Path(__file__).parent / "assets" / "spritesheet.webp"
         self.sprites = SpriteSheet(sheet_path, self.cfg["scale"])
         self.pet = PetWindow(self.sprites)
-        self.pet.place_initial(self.cfg["pos"])
+        # Always start in the bottom-right corner, regardless of any
+        # position saved from a previous drag (see `_on_pet_moved`).
+        self.pet.place_initial(None)
         self.bubble = SpeechBubble()
         self.tab_review = tab_review.TabReview(
             tab_review.KeepList(), today=date.today()
