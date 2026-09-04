@@ -25,7 +25,7 @@ class SpeechBubble(QWidget):
         self._label = QLabel(self)
         self._label.setWordWrap(True)
         self._label.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self._label.setMaximumWidth(236)
+        self._label.setFixedWidth(236)
         self._label.setStyleSheet("color: #17202a; background: transparent;")
         self._label.setFont(QFont("Segoe UI", 10))
         layout = QVBoxLayout(self)
@@ -50,7 +50,7 @@ class SpeechBubble(QWidget):
         if actionable:
             text = f"{text}\nClick me once you've had a sip"
         self._label.setText(text)
-        self._label.adjustSize()
+        self._label.setFixedHeight(self._label.heightForWidth(236))
         self.adjustSize()
         self._show_near(near, seconds)
 
@@ -65,7 +65,7 @@ class SpeechBubble(QWidget):
         self._choice_mode = True
         self._clicked = False
         self._label.setText(text)
-        self._label.adjustSize()
+        self._label.setFixedHeight(self._label.heightForWidth(236))
         self._clear_choices()
         for choice in choices:
             button = QPushButton(choice, self)
@@ -85,6 +85,7 @@ class SpeechBubble(QWidget):
     def _clear_choices(self) -> None:
         for button in self._choice_buttons:
             self._choice_layout.removeWidget(button)
+            button.setParent(None)
             button.deleteLater()
         self._choice_buttons.clear()
         self._choice_layout.setEnabled(False)
@@ -121,7 +122,7 @@ class SpeechBubble(QWidget):
         if self._actionable:
             text = f"{text}\nClick me once you've had a sip"
         self._label.setText(text)
-        self._label.adjustSize()
+        self._label.setFixedHeight(self._label.heightForWidth(236))
         self.adjustSize()
 
     def _expire(self) -> None:

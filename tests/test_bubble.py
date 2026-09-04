@@ -86,3 +86,28 @@ def test_choice_bubble_expiry_emits_ignored(qapp):
     )
     bubble._expire()
     assert ignored == [True]
+
+
+def test_choice_bubble_replaces_buttons_and_wraps_long_text(qapp):
+    bubble = SpeechBubble()
+    bubble.show_choice(
+        "A long first prompt that takes more than one line to render correctly.",
+        QRect(100, 100, 192, 208),
+        10,
+        ("Show me", "Later"),
+    )
+    bubble.show_choice(
+        'Close "Jenkins - build #4211 - console output"? Press Ctrl+W — '
+        "or Keep it and I'll ask tomorrow.",
+        QRect(100, 100, 192, 208),
+        10,
+        ("Keep it", "Next"),
+    )
+    qapp.processEvents()
+
+    assert len(bubble._choice_buttons) == 2
+    assert [button.text() for button in bubble._choice_buttons] == [
+        "Keep it",
+        "Next",
+    ]
+    assert bubble._label.height() >= bubble._label.heightForWidth(236)
