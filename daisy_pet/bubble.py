@@ -17,6 +17,10 @@ from PySide6.QtWidgets import (
 )
 
 
+TAIL_HEIGHT = 14
+LUMP_INSET = 11
+
+
 class SpeechBubble(QWidget):
     acknowledged = Signal()
     ignored = Signal()
@@ -37,7 +41,7 @@ class SpeechBubble(QWidget):
         self._label.setStyleSheet("color: #17202a; background: transparent;")
         self._label.setFont(QFont("Segoe UI", 10))
         self._layout = QVBoxLayout(self)
-        self._layout.setContentsMargins(12, 9, 12, 9)
+        self._layout.setContentsMargins(18, 16, 18, 16)
         self._layout.addWidget(self._label)
         self._choice_layout = QHBoxLayout()
         self._layout.addLayout(self._choice_layout)
@@ -110,11 +114,11 @@ class SpeechBubble(QWidget):
         x = max(area.left() + 4, min(x, area.right() - self.width() - 4))
         above = near.top() - self.height() - 8
         self._tail_below = above < area.top()
-        left, top, right, bottom = 12, 9, 12, 9
+        left, top, right, bottom = 18, 16, 18, 16
         if self._tail_below:
-            top += 16
+            top += TAIL_HEIGHT
         else:
-            bottom += 16
+            bottom += TAIL_HEIGHT
         self._layout.setContentsMargins(left, top, right, bottom)
         self.adjustSize()
         above = near.top() - self.height() - 8
@@ -159,52 +163,61 @@ class SpeechBubble(QWidget):
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        width = self.width()
         height = self.height()
-        tail = 16
-        body_top = tail if self._tail_below else 0
-        body_bottom = height - (0 if self._tail_below else tail)
-        body = QRectF(2, body_top + 2, width - 4, body_bottom - body_top - 4)
+        body_top = (TAIL_HEIGHT if self._tail_below else 0) + LUMP_INSET
+        body_bottom = (
+            height - (0 if self._tail_below else TAIL_HEIGHT) - LUMP_INSET
+        )
+        body = QRectF(
+            LUMP_INSET,
+            body_top,
+            self.width() - 2 * LUMP_INSET,
+            body_bottom - body_top,
+        )
         path = QPainterPath()
-        path.addRoundedRect(body, 12, 12)
-        for center_x in (body.left() + 22, body.center().x(), body.right() - 22):
-            path = path.united(
-                self._cloud_lump(center_x, body.top(), top=True)
-            )
-            path = path.united(
-                self._cloud_lump(center_x, body.bottom(), top=False)
-            )
-
-        center_x = body.center().x()
-        if self._tail_below:
-            base_y, tip_y = body.top() + 2, 2
-        else:
-            base_y, tip_y = body.bottom() - 2, height - 2
-        tail_path = QPainterPath()
-        tail_path.moveTo(center_x - 9, base_y)
-        tail_path.quadTo(center_x, tip_y, center_x + 9, base_y)
-        tail_path.quadTo(center_x, base_y + (2 if self._tail_below else -2), center_x - 9, base_y)
-        path = path.united(tail_path)
+        path.addRoundedRect(body, 14, 14)
+        for index in range(4):
+            center_x = body.left() + body.width() * (index + 0.5) / 4
+            path = path.united(self._lump(center_x, body.top(), 21, 14))
+            path = path.united(self._lump(center_x, body.bottom(), 21, 14))
+        for index in range(2):
+            center_y = body.top() + body.height() * (index + 0.5) / 2
+            path = path.united(self._lump(body.left(), center_y, 13, 17))
+            path = path.united(self._lump(body.right(), center_y, 13, 17))
+        path = path.united(self._tail(body, height))
 
         gradient = QLinearGradient(0, 0, 0, height)
         gradient.setColorAt(0, QColor("#ffffff"))
-        gradient.setColorAt(1, QColor("#e6f2fb"))
-        painter.setPen(QPen(QColor("#6ba3cf"), 2))
+        gradient.setColorAt(1, QColor("#dcecfa"))
+        painter.setPen(QPen(QColor("#5b9bd5"), 2))
         painter.setBrush(gradient)
         painter.drawPath(path)
 
-    @staticmethod
-    def _cloud_lump(center_x: float, edge_y: float, top: bool) -> QPainterPath:
-        radius_x, radius_y = 14, 10
-        center_y = edge_y + (radius_y - 1 if top else -(radius_y - 1))
-        ellipse = QRectF(
-            center_x - radius_x,
-            center_y - radius_y,
-            radius_x * 2,
-            radius_y * 2,
-        )
+    def _tail(self, body: QRectF, height: float) -> QPainterPath:
+        center_x = body.center().x()
+        if self._tail_below:
+            base_y, tip_y = body.top() + 6, 3.0
+        else:
+            base_y, tip_y = body.bottom() - 6, height - 3
         path = QPainterPath()
-        path.addEllipse(ellipse)
+        path.moveTo(center_x - 13, base_y)
+        path.quadTo(center_x - 4, tip_y, center_x + 11, base_y)
+        path.closeSubpath()
+        return path
+
+    @staticmethod
+    def _lump(
+        center_x: float, center_y: float, radius_x: float, radius_y: float
+    ) -> QPainterPath:
+        path = QPainterPath()
+        path.addEllipse(
+            QRectF(
+                center_x - radius_x,
+                center_y - radius_y,
+                radius_x * 2,
+                radius_y * 2,
+            )
+        )
         return path
 
     def mousePressEvent(self, event) -> None:
