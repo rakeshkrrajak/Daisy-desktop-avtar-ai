@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 import random
 from types import SimpleNamespace
 
-from PySide6.QtCore import QPoint
+from PySide6.QtCore import QPoint, QRect, QSize
 
 from daisy_pet.activity import ActivitySnapshot, Observation, WindowInfo
 from daisy_pet.app import DaisyApplication, SIP_DURATION_MS
@@ -19,6 +19,7 @@ def test_water_walk_plays_mood_after_sip(monkeypatch, qapp):
     app.cfg = {
         "mood_enabled": True,
         "bubble_seconds": 12,
+        "reminder_wait_seconds": 120,
         "walk_crossing_seconds": 8,
         "walk_drink_fraction": 0.4,
     }
@@ -33,8 +34,8 @@ def test_water_walk_plays_mood_after_sip(monkeypatch, qapp):
         reminder_walk_in=lambda crossing, fraction, callback: callback()
     )
     app._signals = lambda: None
-    app._show_reminder_line = lambda line, tone, actionable: events.append(
-        ("line", line, tone, actionable)
+    app._show_reminder_choice = lambda line, tone: events.append(
+        ("choice", line, tone)
     )
     app._play_mood = lambda value: events.append(("mood", value.mood))
     monkeypatch.setattr(
@@ -55,6 +56,96 @@ def test_water_walk_plays_mood_after_sip(monkeypatch, qapp):
     assert callbacks and callbacks[0][0] == SIP_DURATION_MS
     callbacks[0][1]()
     assert ("mood", "happy") in events
+
+
+def test_water_reminder_waits_for_choice_without_walkout_timer(monkeypatch, qapp):
+    callbacks = []
+    app = DaisyApplication.__new__(DaisyApplication)
+    app.cfg = {
+        "mood_enabled": False,
+        "ollama_enabled": False,
+        "reminder_wait_seconds": 120,
+        "walk_crossing_seconds": 8,
+        "walk_drink_fraction": 0.4,
+    }
+    app._tab_review_prompt = False
+    app.tab_review = SimpleNamespace(active=False)
+    app.pet = SimpleNamespace(
+        start_sip=lambda duration: None,
+        isVisible=lambda: True,
+    )
+    app.reminder = SimpleNamespace(mark_fired=lambda: None)
+    app.walker = SimpleNamespace(
+        reminder_walk_in=lambda crossing, fraction, callback: callback()
+    )
+    app._show_reminder_choice = lambda line, tone: None
+    monkeypatch.setattr(
+        "daisy_pet.app.QTimer.singleShot",
+        lambda delay, callback: callbacks.append((delay, callback)),
+    )
+
+    app._start_water_reminder_walk()
+
+    assert callbacks == []
+
+
+def test_reminder_choice_acknowledgement_records_and_walks_out(monkeypatch):
+    events = []
+    app = DaisyApplication.__new__(DaisyApplication)
+    app.cfg = {"mood_enabled": False}
+    app._reminder_choice_active = True
+    app.reminder = SimpleNamespace()
+    app._show_message = lambda text: events.append(("message", text))
+    app._finish_reminder_walk = lambda: events.append("finish")
+    monkeypatch.setattr(
+        "daisy_pet.app.QTimer.singleShot",
+        lambda delay, callback: (events.append(delay), callback()),
+    )
+
+    app._on_bubble_choice("I drank it")
+
+    assert events[0][0] == "message"
+    assert events[1:] == [1200, "finish"]
+    assert app._reminder_choice_active is False
+
+
+def test_reminder_choice_snoozes_five_minutes_and_walks_out(monkeypatch):
+    events = []
+    app = DaisyApplication.__new__(DaisyApplication)
+    app.cfg = {"mood_enabled": False}
+    app._reminder_choice_active = True
+    app.reminder = SimpleNamespace(
+        snooze=lambda minutes: events.append(("snooze", minutes))
+    )
+    app._show_message = lambda text: events.append(("message", text))
+    app._finish_reminder_walk = lambda: events.append("finish")
+    monkeypatch.setattr(
+        "daisy_pet.app.QTimer.singleShot",
+        lambda delay, callback: (events.append(delay), callback()),
+    )
+
+    app._on_bubble_choice("Snooze 5 min")
+
+    assert ("snooze", 5) in events
+    assert any(event[0] == "message" for event in events if isinstance(event, tuple))
+    assert events[-2:] == [1200, "finish"]
+
+
+def test_reminder_choice_expiry_records_ignore_and_walks_out(monkeypatch):
+    events = []
+    app = DaisyApplication.__new__(DaisyApplication)
+    app.cfg = {"mood_enabled": True}
+    app._reminder_choice_active = True
+    app.mood_state = SimpleNamespace(
+        record_ignored=lambda: events.append("ignored")
+    )
+    app._finish_reminder_walk = lambda: events.append("finish")
+    monkeypatch.setattr("daisy_pet.app.mood.save", lambda state: None)
+
+    app._on_bubble_ignored()
+
+    assert events == ["ignored", "finish"]
+    assert app._reminder_choice_active is False
 
 
 def test_activity_poll_is_gated(monkeypatch, qapp):
@@ -271,9 +362,38 @@ def test_review_timeout_resets_after_closed_step(monkeypatch):
     assert app._tab_review_started_at > before
 
 
+def test_review_bubble_uses_moved_to_anchor(monkeypatch):
+    app = DaisyApplication.__new__(DaisyApplication)
+    app.cfg = {"bubble_seconds": 12}
+    app.tab_review = SimpleNamespace(
+        current=lambda: TabInfo(
+            "key", "Jenkins", "chrome.exe", False, rect=(100, 200, 300, 240)
+        )
+    )
+    app._tab_review_started_at = None
+    app.pet = SimpleNamespace(
+        width=lambda: 50,
+        size=lambda: QSize(50, 60),
+        clamp_position=lambda position: QPoint(30, 40),
+        move=lambda position: None,
+        play=lambda *args, **kwargs: None,
+        geometry=lambda: QRect(900, 900, 50, 60),
+    )
+    anchors = []
+    app.bubble = SimpleNamespace(
+        show_choice=lambda text, near, seconds, choices: anchors.append(near)
+    )
+    monkeypatch.setattr("daisy_pet.app.tabs.focus_tab", lambda key: True)
+
+    app._present_tab_review()
+
+    assert anchors[0].topLeft() == QPoint(30, 40)
+
+
 def test_review_bubble_expiry_cancels_and_restores_position():
     app = DaisyApplication.__new__(DaisyApplication)
     app.cfg = {}
+    app._reminder_choice_active = False
     app.tab_review = SimpleNamespace(
         active=True,
         cancel=lambda: setattr(app.tab_review, "active", False),
@@ -301,6 +421,7 @@ def test_review_bubble_expiry_cancels_and_restores_position():
 def test_bubble_expiry_outside_review_records_ignored(monkeypatch):
     app = DaisyApplication.__new__(DaisyApplication)
     app.cfg = {"mood_enabled": True}
+    app._reminder_choice_active = False
     app.tab_review = SimpleNamespace(active=False)
     app._tab_review_prompt = False
     app.mood_state = SimpleNamespace(record_ignored=lambda: setattr(

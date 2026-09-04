@@ -89,11 +89,18 @@ class Walker:
         )
 
     def reminder_walk_out(
-        self, crossing_seconds: float, on_exited: Callable[[], None]
+        self,
+        crossing_seconds: float,
+        on_exited: Callable[[], None],
+        to_right: bool = False,
     ) -> None:
-        """Continue walking left off-screen after the drink pause, then vanish."""
+        """Continue walking off-screen after the drink pause, then vanish."""
         area = self.screen_area()
-        exit_x = area.left() - ENTRY_MARGIN
+        exit_x = (
+            area.right() + ENTRY_MARGIN
+            if to_right
+            else area.left() - ENTRY_MARGIN
+        )
 
         def finished() -> None:
             self.busy = False

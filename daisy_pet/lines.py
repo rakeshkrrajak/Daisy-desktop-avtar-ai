@@ -91,6 +91,27 @@ def ack_line(rng: random.Random | None = None) -> str:
     )
 
 
+def water_ack_line(rng: random.Random | None = None) -> str:
+    chooser = rng or random
+    return chooser.choice(
+        (
+            "Thanks for drinking it!",
+            "Nice work — thank you for hydrating!",
+            "Yay, thank you for the sip!",
+        )
+    )
+
+
+def snooze_line(minutes: int, rng: random.Random | None = None) -> str:
+    chooser = rng or random
+    return chooser.choice(
+        (
+            f"Snoozed for {minutes} minutes. Daisy will remind you!",
+            f"Okay — I'll wait {minutes} minutes before asking again.",
+        )
+    )
+
+
 def pick_observation(
     kind: str, rng: random.Random | None = None
 ) -> str:
