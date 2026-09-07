@@ -14,18 +14,19 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import QApplication, QDialog
 
-from . import activity, config, liveliness, schedule, tab_review, tabs
+from . import activity, config, liveliness, memory, schedule, tab_review, tabs
 from .bubble import SpeechBubble
 from .custom_reminders import CustomReminder, CustomReminderStore
 from . import lines, mood, ollama
 from .pet_window import PetWindow
 from .reminder import WaterReminder, pick_message
-from .settings_dialog import SettingsDialog
+from .settings_dialog import AddNoteDialog, SettingsDialog
 from .sprites import SpriteSheet
 from .tray import DaisyTray
 from .walker import Walker
 
 SIP_DURATION_MS = 2700
+SUMMARY_POLL_MS = 30_000
 
 
 class _OllamaSignals(QObject):
@@ -66,6 +67,10 @@ class DaisyApplication:
         self._tab_review_started_at: datetime | None = None
         self._reminder_choice_active = False
         self.reminder = WaterReminder(self.cfg["interval_minutes"])
+        self.memory = memory.open_memory() if self.cfg["memory_enabled"] else None
+        self.usage = memory.UsageAccumulator()
+        self._summary_shown_on: date | None = None
+        self._prune_memory()
         self.mood_state = mood.load()
         self._last_drag_mood_at = 0.0
         self._last_tickle_at = 0.0
@@ -89,8 +94,10 @@ class DaisyApplication:
             snooze_custom=self.snooze_custom,
             set_interval=self.set_interval,
             set_enabled=self.set_enabled,
-            quit_app=self.qt_app.quit,
+            quit_app=self.quit,
             open_settings=self.open_settings,
+            show_summary=self.show_day_summary,
+            add_note=self.add_note,
             interval=self.reminder.interval_minutes,
             enabled=self.cfg["enabled"],
         )
@@ -133,6 +140,10 @@ class DaisyApplication:
         self.liveliness_timer.setSingleShot(True)
         self.liveliness_timer.timeout.connect(self._on_liveliness_timer)
         self._schedule_next_liveliness()
+        self.summary_timer = QTimer()
+        self.summary_timer.setInterval(SUMMARY_POLL_MS)
+        self.summary_timer.timeout.connect(self._poll_summary)
+        self.summary_timer.start()
 
     def _save_position(self, position) -> None:
         self.cfg["pos"] = [position.x(), position.y()]
@@ -247,6 +258,7 @@ class DaisyApplication:
         if not self._reminder_choice_active:
             return
         self._reminder_choice_active = False
+        self._record_hydration(memory.HYDRATION_IGNORED)
         if self.cfg["mood_enabled"]:
             self.mood_state.record_ignored()
             mood.save(self.mood_state)
@@ -341,6 +353,7 @@ class DaisyApplication:
         if snapshot is None:
             return
         self.latest_activity_snapshot = snapshot
+        self._record_usage(snapshot)
         observation = self.activity_watcher.observe(snapshot)
         if observation is None or self.bubble.isVisible():
             return
@@ -391,6 +404,98 @@ class DaisyApplication:
         else:
             self._show_message(observation.text)
 
+    def quit(self) -> None:
+        if self.memory is not None:
+            self._flush_usage()
+            self.memory.close()
+            self.memory = None
+        self.qt_app.quit()
+
+    def _prune_memory(self) -> None:
+        if self.memory is None:
+            return
+        cutoff = date.today() - timedelta(days=self.cfg["memory_retention_days"])
+        self.memory.prune(cutoff)
+
+    def _record_usage(self, snapshot: activity.ActivitySnapshot) -> None:
+        if self.memory is None:
+            return
+        chunk = self.usage.observe(
+            snapshot.window.process, snapshot.at, snapshot.idle_seconds
+        )
+        if chunk is not None:
+            self.memory.record_app_usage(*chunk)
+
+    def _flush_usage(self) -> None:
+        chunk = self.usage.flush()
+        if chunk is not None and self.memory is not None:
+            self.memory.record_app_usage(*chunk)
+
+    def _record_hydration(self, kind: str) -> None:
+        if self.memory is not None:
+            self.memory.record_hydration(kind)
+
+    def _record_tab_decision(self, kind: str, title: str) -> None:
+        if self.memory is not None:
+            self.memory.record_tab_decision(kind, title)
+
+    def add_note(self) -> None:
+        dialog = AddNoteDialog()
+        if dialog.exec() != QDialog.Accepted:
+            return
+        text = dialog.note_text()
+        if self.memory is None:
+            self._show_message("My memory is switched off — turn it on in Settings.")
+            return
+        if self.memory.add_note(text, dialog.due_date_string()):
+            self._show_message("Noted! I'll keep that in mind.")
+        else:
+            self._show_message("That note was too long for me — try a shorter one.")
+
+    def _day_summary_text(self) -> str:
+        if self.memory is None:
+            return "My memory is switched off — turn it on in Settings."
+        self._flush_usage()
+        return lines.day_summary_line(self.memory.summary(date.today()))
+
+    def show_day_summary(self) -> None:
+        if self._reminder_choice_active or self._tab_review_active():
+            return
+        text = self._day_summary_text()
+        if not self.pet.isVisible():
+            self.pet.show_at_right_corner()
+        self.pet.play("waving", loops=2)
+        self._show_message(text)
+
+    def _summary_due(self, now: datetime | None = None) -> bool:
+        moment = now or datetime.now()
+        if self._summary_shown_on == moment.date():
+            return False
+        return moment.time() >= schedule.parse_time(self.cfg["summary_time"])
+
+    def _poll_summary(self) -> None:
+        if (
+            not self.cfg["summary_enabled"]
+            or not self.cfg["memory_enabled"]
+            or not self.cfg["enabled"]
+            or self.memory is None
+            or not self._schedule_active()
+            or self.walker.busy
+            or self.bubble.isVisible()
+            or self._reminder_choice_active
+            or self._tab_review_active()
+            or not self._summary_due()
+        ):
+            return
+        self._summary_shown_on = datetime.now().date()
+        text = self._day_summary_text()
+        if self.cfg["walk_enabled"]:
+            self._start_reminder_walk(
+                text, lambda: self.pet.play("waving", loops=2, then="idle")
+            )
+        else:
+            self.show_day_summary()
+
     def _tab_review_active(self) -> bool:
         return self._tab_review_prompt or self.tab_review.active
 
@@ -398,6 +503,7 @@ class DaisyApplication:
         if self._reminder_choice_active:
             self._reminder_choice_active = False
             if choice == "I drank it":
+                self._record_hydration(memory.HYDRATION_ACK)
                 if self.cfg["mood_enabled"]:
                     self.mood_state.record_ack(datetime.now())
                     mood.save(self.mood_state)
@@ -408,6 +514,7 @@ class DaisyApplication:
                 else:
                     self._show_message(lines.water_ack_line())
             elif choice == "Snooze 5 min":
+                self._record_hydration(memory.HYDRATION_SNOOZE)
                 self.reminder.snooze(5)
                 if self.cfg["mood_enabled"]:
                     self.mood_state.record_snooze()
@@ -431,6 +538,9 @@ class DaisyApplication:
         if not self.tab_review.active:
             return
         if choice == "Keep it":
+            current = self.tab_review.current()
+            if current is not None:
+                self._record_tab_decision(memory.TAB_KEPT, current.title)
             self.tab_review.keep_current(date.today())
         elif choice == "Next":
             self.tab_review.skip_current()
@@ -489,8 +599,11 @@ class DaisyApplication:
         snapshot = tabs.probe_tabs()
         if snapshot is None:
             return
+        reviewed = self.tab_review.current()
         result = self.tab_review.sync(snapshot)
         if result == "closed":
+            if reviewed is not None:
+                self._record_tab_decision(memory.TAB_CLOSED, reviewed.title)
             self._tab_review_started_at = datetime.now()
             if self.cfg["mood_enabled"]:
                 self._play_mood(
@@ -758,6 +871,14 @@ class DaisyApplication:
         self.cfg.update(values)
         if not self.cfg["tab_review_enabled"]:
             self._cancel_tab_review()
+        if self.cfg["memory_enabled"]:
+            if self.memory is None:
+                self.memory = memory.open_memory()
+            self._prune_memory()
+        elif self.memory is not None:
+            self._flush_usage()
+            self.memory.close()
+            self.memory = None
         if self.cfg["scale"] != old_scale:
             self.pet.rescale(self.cfg["scale"])
             if self.walker.busy:
