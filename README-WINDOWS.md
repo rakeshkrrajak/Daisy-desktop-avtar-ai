@@ -36,10 +36,9 @@ interval), she walks in from the right edge, stops partway across (40% by
 default) and holds up her water bottle for a sip. She waits for your choice:
 **I drank it** records the sip, while **Snooze 5 min** postpones this reminder.
 If the choice bubble expires, the reminder is counted as ignored. Daisy then
-walks back out to the left and disappears until the next reminder. Daisy
-always starts in the right corner and walks right-to-left along the taskbar
-line. The
-**Snooze 10 minutes** tray command remains separate.
+walks back out to the left and disappears until the next reminder. She always
+appears in the right corner and walks right-to-left, with her feet on the
+taskbar line. The **Snooze 10 minutes** tray command remains separate.
 
 ## Tray menu
 
