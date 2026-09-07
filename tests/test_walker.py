@@ -3,6 +3,7 @@ import time
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import QPoint
 
 from daisy_pet.pet_window import PetWindow
 from daisy_pet.sprites import SpriteSheet
@@ -101,6 +102,7 @@ def test_reminder_walk_in_stops_at_drink_fraction_then_out(qapp, sheet):
     expected_drink_x = round(entry_x - 0.4 * (entry_x - far_x))
     assert pet.isVisible()
     assert walker.busy
+    assert pet.pos() == QPoint(entry_x, walker.baseline_y(area))
 
     assert _wait_until(lambda: arrived)
     assert pet.x() == expected_drink_x

@@ -73,6 +73,21 @@ def test_clamp_position_preserves_taskbar_baseline(qapp, sheet):
     assert clamped.y() == area.bottom() + 1 - pet.height() + pet.foot_padding
 
 
+def test_show_at_reasserts_position_after_mapping(qapp, sheet, monkeypatch):
+    pet = PetWindow(sheet)
+    shown = []
+
+    def fake_show():
+        shown.append(True)
+        pet.move(300, 300)
+
+    monkeypatch.setattr(pet, "show", fake_show)
+    pet.show_at(20, 30)
+
+    assert shown == [True]
+    assert pet.pos() == QPoint(20, 30)
+
+
 def test_start_walk_picks_direction_from_target(qapp, sheet):
     pet = PetWindow(sheet)
     pet.move(500, 100)

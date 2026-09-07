@@ -146,16 +146,31 @@ class PetWindow(QWidget):
     def place_initial(self, position: list[int] | None) -> None:
         self.place_right_corner()
 
-    def place_right_corner(self) -> None:
+    def _right_corner_point(self) -> QPoint | None:
         screen = QGuiApplication.primaryScreen()
         if screen is None:
-            self.move(40, 40)
-            return
+            return None
         area = screen.availableGeometry()
-        self.move(
+        return QPoint(
             area.right() + 1 - self.width(),
             area.bottom() + 1 - self.height() + self.foot_padding,
         )
+
+    def place_right_corner(self) -> None:
+        point = self._right_corner_point()
+        self.move(point if point is not None else QPoint(40, 40))
+
+    def show_at(self, x: int, y: int) -> None:
+        self.move(x, y)
+        self.show()
+        self.move(x, y)
+
+    def show_at_right_corner(self) -> None:
+        point = self._right_corner_point()
+        if point is None:
+            self.show_at(40, 40)
+        else:
+            self.show_at(point.x(), point.y())
 
     def clamp_position(self, position: QPoint) -> QPoint:
         screens = QGuiApplication.screens()

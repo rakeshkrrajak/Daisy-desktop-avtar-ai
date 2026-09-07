@@ -85,8 +85,7 @@ class Walker:
         far_x = area.left() + ENTRY_MARGIN
         drink_x = round(entry_x - drink_fraction * (entry_x - far_x))
         self.busy = True
-        self.pet.move(entry_x, self.baseline_y(area))
-        self.pet.show()
+        self.pet.show_at(entry_x, self.baseline_y(area))
         self.pet.start_walk(
             drink_x, self.speed_for(crossing_seconds, area), on_drink_point
         )
