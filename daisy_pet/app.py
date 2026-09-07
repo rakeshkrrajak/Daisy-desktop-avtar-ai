@@ -68,12 +68,14 @@ class DaisyApplication:
         self.reminder = WaterReminder(self.cfg["interval_minutes"])
         self.mood_state = mood.load()
         self._last_drag_mood_at = 0.0
+        self._last_tickle_at = 0.0
         self._bubble_generation = 0
         self.custom_reminders = CustomReminderStore.from_config_list(
             self.cfg["custom_reminders"]
         )
         self.walker = Walker(self.pet)
         self.pet.moved.connect(self._on_pet_moved)
+        self.pet.tickled.connect(self._on_tickled)
         self.pet.clicked.connect(self._show_next_reminder)
         self.bubble.acknowledged.connect(self._on_bubble_acknowledged)
         self.bubble.ignored.connect(self._on_bubble_ignored)
@@ -144,6 +146,23 @@ class DaisyApplication:
         if self.cfg["mood_enabled"] and now - self._last_drag_mood_at >= 3:
             self._last_drag_mood_at = now
             self._play_mood(mood.decide(self._signals(just_dragged=True)))
+
+    def _on_tickled(self) -> None:
+        if (
+            self.pet.is_walking
+            or self._reminder_choice_active
+            or self._tab_review_active()
+        ):
+            return
+        now = datetime.now().timestamp()
+        if now - self._last_tickle_at < 6:
+            return
+        self._last_tickle_at = now
+        if self.cfg["mood_enabled"]:
+            self._play_mood(mood.decide(self._signals(just_tickled=True)))
+        else:
+            self.pet.play("jumping", loops=1, then="idle")
+        self._show_message(lines.tickle_line())
 
     def _show_message(self, text: str, actionable: bool = False) -> None:
         self._abandon_reminder_choice()

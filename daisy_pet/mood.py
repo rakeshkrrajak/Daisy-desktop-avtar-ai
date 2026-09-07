@@ -47,6 +47,7 @@ class MoodSignals:
     just_acknowledged: bool = False
     just_snoozed: bool = False
     just_dragged: bool = False
+    just_tickled: bool = False
     first_appearance_today: bool = False
 
 
@@ -62,7 +63,9 @@ def decide(signals: MoodSignals) -> MoodDecision:
         raise ValueError("hour must be between 0 and 23")
     if signals.snooze_streak < 0 or signals.ignored_streak < 0:
         raise ValueError("streaks must not be negative")
-    if signals.just_dragged:
+    if signals.just_tickled:
+        mood, reason = "happy", "just_tickled"
+    elif signals.just_dragged:
         mood, reason = "surprised", "just_dragged"
     elif signals.just_acknowledged:
         mood, reason = "happy", "just_acknowledged"
