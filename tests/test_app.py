@@ -83,7 +83,10 @@ def test_activity_message_abandons_pending_reminder_choice(monkeypatch):
         isVisible=lambda: False,
         show_message=lambda *args, **kwargs: events.append("message"),
     )
-    app.pet = SimpleNamespace(geometry=lambda: QRect(10, 20, 50, 60))
+    app.pet = SimpleNamespace(
+        geometry=lambda: QRect(10, 20, 50, 60),
+        isVisible=lambda: True,
+    )
     app.activity_watcher = SimpleNamespace(
         observe=lambda snapshot: Observation("sitting", "Stretch?", "gentle")
     )
@@ -174,7 +177,10 @@ def test_tab_review_prompt_abandons_pending_reminder_choice(monkeypatch):
         isVisible=lambda: False,
         show_choice=lambda *args, **kwargs: events.append("prompt"),
     )
-    app.pet = SimpleNamespace(geometry=lambda: QRect(10, 20, 50, 60))
+    app.pet = SimpleNamespace(
+        geometry=lambda: QRect(10, 20, 50, 60),
+        isVisible=lambda: True,
+    )
     app.tab_watcher = SimpleNamespace(
         last_stale_tabs=(),
         observe=lambda snapshot: Observation(
@@ -194,6 +200,48 @@ def test_tab_review_prompt_abandons_pending_reminder_choice(monkeypatch):
 
     assert app._reminder_choice_active is False
     assert events == ["ignored", "finish", "prompt"]
+
+
+def test_tab_review_prompt_brings_daisy_back_before_the_bubble(monkeypatch):
+    events = []
+    app = DaisyApplication.__new__(DaisyApplication)
+    app.cfg = {
+        "tab_hints_enabled": True,
+        "tab_review_enabled": True,
+        "enabled": True,
+        "schedule_enabled": False,
+        "mood_enabled": False,
+        "bubble_seconds": 12,
+    }
+    app.walker = SimpleNamespace(busy=False)
+    app._reminder_choice_active = False
+    app._bubble_generation = 0
+    app.memory = None
+    app.bubble = SimpleNamespace(
+        isVisible=lambda: False,
+        show_choice=lambda *args, **kwargs: events.append("prompt"),
+    )
+    app.pet = SimpleNamespace(
+        geometry=lambda: QRect(10, 20, 50, 60),
+        isVisible=lambda: False,
+        show_at_right_corner=lambda: events.append("shown"),
+    )
+    app.tab_watcher = SimpleNamespace(
+        last_stale_tabs=(),
+        observe=lambda snapshot: Observation(
+            "stale_tabs", "Close these?", "firm"
+        ),
+    )
+    app.tab_review = SimpleNamespace(active=False)
+    app._tab_review_prompt = False
+    monkeypatch.setattr(
+        "daisy_pet.app.tabs.probe_tabs",
+        lambda: TabSnapshot((), datetime.now(), "windows"),
+    )
+
+    app._poll_tabs()
+
+    assert events == ["shown", "prompt"]
 
 
 def test_reminder_ack_choice_does_not_record_ignored(monkeypatch):
@@ -581,7 +629,7 @@ def test_scale_change_clamps_daisy_during_walk(monkeypatch):
 
 def test_review_bubble_uses_moved_to_anchor(monkeypatch):
     app = DaisyApplication.__new__(DaisyApplication)
-    app.cfg = {"bubble_seconds": 12}
+    app.cfg = {"bubble_seconds": 12, "schedule_enabled": False}
     app.tab_review = SimpleNamespace(
         current=lambda: TabInfo(
             "key", "Jenkins", "chrome.exe", False, rect=(100, 200, 300, 240)
@@ -595,6 +643,7 @@ def test_review_bubble_uses_moved_to_anchor(monkeypatch):
         move=lambda position: None,
         play=lambda *args, **kwargs: None,
         geometry=lambda: QRect(900, 900, 50, 60),
+        isVisible=lambda: True,
     )
     anchors = []
     app.bubble = SimpleNamespace(

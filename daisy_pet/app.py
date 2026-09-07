@@ -175,8 +175,17 @@ class DaisyApplication:
             self.pet.play("jumping", loops=1, then="idle")
         self._show_message(lines.tickle_line())
 
+    def _ensure_pet_visible(self) -> None:
+        """A bubble anchors to Daisy, so she has to be on screen before one
+        opens: between walk-in cycles she is hidden, and her last geometry is
+        all the bubble would have to point at.
+        """
+        if not self.pet.isVisible() and self._schedule_active():
+            self.pet.show_at_right_corner()
+
     def _show_message(self, text: str, actionable: bool = False) -> None:
         self._abandon_reminder_choice()
+        self._ensure_pet_visible()
         self._bubble_generation += 1
         self.bubble.show_message(
             text,
@@ -229,6 +238,7 @@ class DaisyApplication:
         QThreadPool.globalInstance().start(worker)
 
     def _show_reminder_choice(self, line: str, tone: str | None) -> None:
+        self._ensure_pet_visible()
         self._bubble_generation += 1
         self._reminder_choice_active = True
         self.bubble.show_choice(
@@ -395,6 +405,7 @@ class DaisyApplication:
             self._abandon_reminder_choice()
             self._pending_review_tabs = self.tab_watcher.last_stale_tabs
             self._tab_review_prompt = True
+            self._ensure_pet_visible()
             self.bubble.show_choice(
                 observation.text,
                 self.pet.geometry(),
@@ -462,8 +473,7 @@ class DaisyApplication:
         if self._reminder_choice_active or self._tab_review_active():
             return
         text = self._day_summary_text()
-        if not self.pet.isVisible():
-            self.pet.show_at_right_corner()
+        self._ensure_pet_visible()
         self.pet.play("waving", loops=2)
         self._show_message(text)
 
@@ -567,6 +577,7 @@ class DaisyApplication:
             return
         tabs.focus_tab(current.key)
         self._tab_review_started_at = datetime.now()
+        self._ensure_pet_visible()
         if current.rect is not None:
             left, top, right, bottom = current.rect
             position = QPoint(
