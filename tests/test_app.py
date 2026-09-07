@@ -638,6 +638,7 @@ def test_review_bubble_expiry_cancels_and_restores_position():
 def test_bubble_expiry_outside_review_records_ignored(monkeypatch):
     app = DaisyApplication.__new__(DaisyApplication)
     app.cfg = {"mood_enabled": True}
+    app.memory = None
     app._reminder_choice_active = False
     app.tab_review = SimpleNamespace(active=False)
     app._tab_review_prompt = False
@@ -770,6 +771,44 @@ def test_hydration_outcomes_are_recorded(monkeypatch):
         "hydration_snooze",
         "hydration_ignored",
     ]
+
+
+def test_hydration_is_recorded_when_the_bubble_itself_is_clicked():
+    store = _FakeMemory()
+    app = DaisyApplication.__new__(DaisyApplication)
+    app.cfg = {**DEFAULTS, "mood_enabled": False}
+    app.memory = store
+
+    app._on_bubble_acknowledged()
+
+    assert store.hydration == ["hydration_ack"]
+
+
+def test_hydration_is_recorded_when_an_actionable_bubble_expires():
+    store = _FakeMemory()
+    app = DaisyApplication.__new__(DaisyApplication)
+    app.cfg = {**DEFAULTS, "mood_enabled": False}
+    app.memory = store
+    app._reminder_choice_active = False
+    app._tab_review_prompt = False
+    app.tab_review = SimpleNamespace(active=False)
+
+    app._on_bubble_ignored()
+
+    assert store.hydration == ["hydration_ignored"]
+
+
+def test_hydration_is_recorded_when_snoozed_from_the_tray():
+    store = _FakeMemory()
+    app = DaisyApplication.__new__(DaisyApplication)
+    app.cfg = {**DEFAULTS, "mood_enabled": False}
+    app.memory = store
+    app.reminder = SimpleNamespace(snooze=lambda minutes: None)
+    app._show_message = lambda text: None
+
+    app.snooze()
+
+    assert store.hydration == ["hydration_snooze"]
 
 
 def test_tab_decisions_are_recorded_by_title_for_hashing(monkeypatch):

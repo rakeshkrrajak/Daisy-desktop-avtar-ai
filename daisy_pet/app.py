@@ -803,6 +803,7 @@ class DaisyApplication:
             self.reminder.mark_fired()
 
     def snooze(self) -> None:
+        self._record_hydration(memory.HYDRATION_SNOOZE)
         self.reminder.snooze(10)
         if self.cfg["mood_enabled"]:
             self.mood_state.record_snooze()
@@ -816,6 +817,7 @@ class DaisyApplication:
             self._show_message("Snoozed for 10 minutes. Daisy will remind you!")
 
     def _on_bubble_acknowledged(self) -> None:
+        self._record_hydration(memory.HYDRATION_ACK)
         if not self.cfg["mood_enabled"]:
             return
         now = datetime.now()
@@ -831,6 +833,7 @@ class DaisyApplication:
         if self._tab_review_active():
             self._cancel_tab_review()
             return
+        self._record_hydration(memory.HYDRATION_IGNORED)
         if not self.cfg["mood_enabled"]:
             return
         self.mood_state.record_ignored()

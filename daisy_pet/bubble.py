@@ -35,10 +35,12 @@ class SpeechBubble(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        # ToolTip, not Tool: a Tool window only shows while its own
+        # application is active.
         self.setWindowFlags(
             Qt.FramelessWindowHint
             | Qt.WindowStaysOnTopHint
-            | Qt.Tool
+            | Qt.ToolTip
         )
         self.setAttribute(Qt.WA_TranslucentBackground)
         self._label = QLabel(self)
