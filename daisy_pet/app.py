@@ -299,7 +299,7 @@ class DaisyApplication:
                 self.bubble.hide()
             self._schedule_hidden = True
         elif self._schedule_hidden:
-            self.pet.show()
+            self.pet.show_at_right_corner()
             self._schedule_hidden = False
 
     def _poll_reminder(self) -> None:
@@ -610,7 +610,7 @@ class DaisyApplication:
         if not self.pet.isVisible():
             return  # already dismissed (e.g. double-click vanish) — nothing to finish
         self.walker.reminder_walk_out(
-            self.cfg["walk_crossing_seconds"], self.pet.hide, to_right=True
+            self.cfg["walk_crossing_seconds"], self.pet.hide
         )
 
     def _start_water_reminder_walk(self) -> None:
@@ -652,7 +652,7 @@ class DaisyApplication:
 
     def _announce_custom_reminder(self, item: CustomReminder) -> None:
         if not self.pet.isVisible():
-            self.pet.show()
+            self.pet.show_at_right_corner()
         self.pet.play("waving", loops=2)
         self._show_message(f"🔔 {item.text}")
         item.mark_fired()
@@ -678,7 +678,7 @@ class DaisyApplication:
     def drink_now(self, mark: bool = True) -> None:
         self._cancel_tab_review()
         if not self.pet.isVisible():
-            self.pet.show()
+            self.pet.show_at_right_corner()
         if self.cfg["mood_enabled"]:
             decision = mood.decide(self._signals())
             self._play_mood(decision)
@@ -760,7 +760,10 @@ class DaisyApplication:
             self._cancel_tab_review()
         if self.cfg["scale"] != old_scale:
             self.pet.rescale(self.cfg["scale"])
-            self.pet.move(self.pet.clamp_position(self.pet.pos()))
+            if self.walker.busy:
+                self.pet.move(self.pet.clamp_position(self.pet.pos()))
+            else:
+                self.pet.place_right_corner()
         config.save(self.cfg)
         self.reminder.set_interval(self.cfg["interval_minutes"])
         self.tray.set_interval(self.cfg["interval_minutes"])

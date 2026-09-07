@@ -6,6 +6,7 @@ from PySide6.QtCore import QPoint, QRect, QSize
 
 from daisy_pet.activity import ActivitySnapshot, Observation, WindowInfo
 from daisy_pet.app import DaisyApplication, SIP_DURATION_MS
+from daisy_pet.config import DEFAULTS
 from daisy_pet.liveliness import Behaviour
 from daisy_pet.mood import MoodDecision
 from daisy_pet.tabs import TabInfo, TabSnapshot
@@ -523,6 +524,47 @@ def test_review_timeout_resets_after_closed_step(monkeypatch):
     app._poll_tab_review()
 
     assert app._tab_review_started_at > before
+
+
+def _scale_test_app(busy, monkeypatch):
+    events = []
+    app = DaisyApplication.__new__(DaisyApplication)
+    app.cfg = {**DEFAULTS, "scale": 1.0}
+    app.pet = SimpleNamespace(
+        rescale=lambda scale: events.append(("rescale", scale)),
+        pos=lambda: QPoint(10, 20),
+        clamp_position=lambda position: events.append(("clamp", position))
+        or QPoint(10, 20),
+        move=lambda position: events.append(("move", position)),
+        place_right_corner=lambda: events.append("corner"),
+    )
+    app.walker = SimpleNamespace(busy=busy)
+    app.reminder = SimpleNamespace(set_interval=lambda value: None)
+    app.tray = SimpleNamespace(set_interval=lambda value: None)
+    app._refresh_tray_custom_reminders = lambda: None
+    app._schedule_next_ambient_walk = lambda: None
+    app._schedule_next_liveliness = lambda: None
+    app._apply_schedule_visibility = lambda: None
+    monkeypatch.setattr("daisy_pet.app.config.save", lambda cfg: None)
+    return app, events
+
+
+def test_scale_change_replaces_idle_daisy_at_right_corner(monkeypatch):
+    app, events = _scale_test_app(False, monkeypatch)
+
+    app._apply_settings({"scale": 1.5})
+
+    assert events[:2] == [("rescale", 1.5), "corner"]
+
+
+def test_scale_change_clamps_daisy_during_walk(monkeypatch):
+    app, events = _scale_test_app(True, monkeypatch)
+
+    app._apply_settings({"scale": 1.5})
+
+    assert events[0] == ("rescale", 1.5)
+    assert events[1][0] == "clamp"
+    assert "corner" not in events
 
 
 def test_review_bubble_uses_moved_to_anchor(monkeypatch):

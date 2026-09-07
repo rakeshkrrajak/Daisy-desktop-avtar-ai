@@ -2,9 +2,10 @@ import time
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import QPoint
 
 from daisy_pet.pet_window import PetWindow
-from daisy_pet.pet_window import FRAME_MS, RUB_MIN_STEP
+from daisy_pet.pet_window import FOOT_PADDING, FRAME_MS, RUB_MIN_STEP
 from daisy_pet.sprites import SpriteSheet
 
 
@@ -47,8 +48,44 @@ def test_rescale_updates_frame_size_and_clamps_position(qapp, sheet):
     assert pet.size().toTuple() == (384, 416)
     assert pet.x() >= screen.left()
     assert pet.y() >= screen.top()
-    assert pet.geometry().right() <= screen.right()
-    assert pet.geometry().bottom() <= screen.bottom()
+    assert pet.y() + pet.height() - pet.foot_padding == screen.bottom() + 1
+
+
+def test_foot_padding_scales_with_daisy(qapp, sheet):
+    pet = PetWindow(sheet)
+    assert pet.foot_padding == FOOT_PADDING
+    pet.rescale(2.0)
+    assert pet.foot_padding == FOOT_PADDING * 2
+
+
+def test_place_initial_always_uses_right_corner(qapp, sheet):
+    pet = PetWindow(sheet)
+    pet.place_initial([10, 10])
+    area = qapp.primaryScreen().availableGeometry()
+    assert pet.x() == area.right() + 1 - pet.width()
+    assert pet.y() == area.bottom() + 1 - pet.height() + pet.foot_padding
+
+
+def test_clamp_position_preserves_taskbar_baseline(qapp, sheet):
+    pet = PetWindow(sheet)
+    area = qapp.primaryScreen().availableGeometry()
+    clamped = pet.clamp_position(QPoint(area.left(), area.bottom() + 100))
+    assert clamped.y() == area.bottom() + 1 - pet.height() + pet.foot_padding
+
+
+def test_show_at_reasserts_position_after_mapping(qapp, sheet, monkeypatch):
+    pet = PetWindow(sheet)
+    shown = []
+
+    def fake_show():
+        shown.append(True)
+        pet.move(300, 300)
+
+    monkeypatch.setattr(pet, "show", fake_show)
+    pet.show_at(20, 30)
+
+    assert shown == [True]
+    assert pet.pos() == QPoint(20, 30)
 
 
 def test_start_walk_picks_direction_from_target(qapp, sheet):
