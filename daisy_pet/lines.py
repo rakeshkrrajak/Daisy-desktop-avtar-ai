@@ -112,6 +112,17 @@ def snooze_line(minutes: int, rng: random.Random | None = None) -> str:
     )
 
 
+def tickle_line(rng: random.Random | None = None) -> str:
+    chooser = rng or random
+    return chooser.choice(
+        (
+            "Hehe — that tickles!",
+            "Eee! Stop it, that tickles!",
+            "Hehehe, okay okay, I'm awake!",
+        )
+    )
+
+
 def pick_observation(
     kind: str, rng: random.Random | None = None
 ) -> str:

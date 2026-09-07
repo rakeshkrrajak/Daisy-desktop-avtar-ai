@@ -17,6 +17,9 @@ def signals(**kwargs):
 
 
 def test_decision_priority_order():
+    decision = decide(signals(just_tickled=True, just_dragged=True))
+    assert decision.mood == "happy"
+    assert decision.reason == "just_tickled"
     assert decide(signals(just_dragged=True, just_acknowledged=True)).mood == "surprised"
     assert decide(signals(just_acknowledged=True, just_snoozed=True)).mood == "happy"
     assert decide(signals(just_snoozed=True, snooze_streak=2)).mood == "disappointed"

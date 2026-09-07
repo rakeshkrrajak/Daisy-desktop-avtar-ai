@@ -1,3 +1,4 @@
+import time
 from collections.abc import Callable
 
 from PySide6.QtCore import QPoint, QRect, QRectF, Qt, QTimer, Signal
@@ -18,6 +19,9 @@ SIP_TILT_STEP_DEGREES = 4
 DEFAULT_FRAME_MS = 100
 FRAME_MS: dict[str, int] = {"drinking": 450}
 SINGLE_FRAME_HOLD_MS = 1500
+RUB_REVERSALS = 3
+RUB_WINDOW_SECONDS = 1.5
+RUB_MIN_STEP = 3
 
 
 class PetWindow(QWidget):
@@ -25,6 +29,7 @@ class PetWindow(QWidget):
     clicked = Signal()
     right_clicked = Signal()
     double_clicked = Signal()
+    tickled = Signal()
 
     def __init__(
         self,
@@ -41,6 +46,10 @@ class PetWindow(QWidget):
         self._press_global: QPoint | None = None
         self._press_offset: QPoint | None = None
         self._dragged = False
+        self._rub_last_x: int | None = None
+        self._rub_direction = 0
+        self._rub_reversals = 0
+        self._rub_started_at = 0.0
         width, height = sprites.frame_size
         self.setFixedSize(width, height)
         self.setWindowFlags(
@@ -279,6 +288,7 @@ class PetWindow(QWidget):
             self.play("idle")
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
+        self._reset_rub()
         if self.is_walking:
             return
         if event.button() == Qt.LeftButton:
@@ -290,6 +300,8 @@ class PetWindow(QWidget):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        if self._press_global is None and not self.is_walking:
+            self._track_rub(event.globalPosition().toPoint().x())
         if (
             self._press_global is not None
             and self._press_offset is not None
@@ -300,6 +312,37 @@ class PetWindow(QWidget):
                 self._dragged = True
                 self.move(current - self._press_offset)
         super().mouseMoveEvent(event)
+
+    def _track_rub(self, x: int) -> None:
+        now = time.monotonic()
+        if self._rub_last_x is None:
+            self._rub_last_x = x
+            return
+        dx = x - self._rub_last_x
+        if abs(dx) < RUB_MIN_STEP:
+            return
+        if now - self._rub_started_at > RUB_WINDOW_SECONDS:
+            self._rub_reversals = 0
+            self._rub_started_at = now
+        direction = 1 if dx > 0 else -1
+        if self._rub_direction and direction != self._rub_direction:
+            self._rub_reversals += 1
+            if self._rub_reversals >= RUB_REVERSALS:
+                self._reset_rub()
+                self.tickled.emit()
+                return
+        self._rub_direction = direction
+        self._rub_last_x = x
+
+    def _reset_rub(self) -> None:
+        self._rub_last_x = None
+        self._rub_direction = 0
+        self._rub_reversals = 0
+        self._rub_started_at = 0.0
+
+    def leaveEvent(self, event) -> None:
+        self._reset_rub()
+        super().leaveEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.LeftButton and self._press_global is not None:

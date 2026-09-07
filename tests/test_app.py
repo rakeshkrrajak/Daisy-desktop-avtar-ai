@@ -99,6 +99,54 @@ def test_activity_message_abandons_pending_reminder_choice(monkeypatch):
     assert events == ["ignored", "finish", "message"]
 
 
+def test_tickled_plays_mood_and_shows_line(monkeypatch):
+    events = []
+    app = DaisyApplication.__new__(DaisyApplication)
+    app.cfg = {"mood_enabled": True}
+    app.pet = SimpleNamespace(is_walking=False)
+    app._reminder_choice_active = False
+    app._tab_review_prompt = False
+    app.tab_review = SimpleNamespace(active=False)
+    app._last_tickle_at = 0.0
+    app._signals = lambda **flags: events.append(("signals", flags))
+    app._play_mood = lambda decision: events.append(("mood", decision.mood))
+    app._show_message = lambda text: events.append(("line", text))
+    monkeypatch.setattr(
+        "daisy_pet.app.mood.decide",
+        lambda signals: MoodDecision("happy", "cheerful", "just_tickled"),
+    )
+    monkeypatch.setattr(
+        "daisy_pet.app.lines.tickle_line", lambda: "Hehe — that tickles!"
+    )
+
+    app._on_tickled()
+    app._on_tickled()
+
+    assert events[0] == ("signals", {"just_tickled": True})
+    assert ("mood", "happy") in events
+    assert ("line", "Hehe — that tickles!") in events
+    assert events.count(("line", "Hehe — that tickles!")) == 1
+
+
+def test_tickled_is_ignored_during_reminder_or_walk(monkeypatch):
+    shown = []
+    app = DaisyApplication.__new__(DaisyApplication)
+    app.cfg = {"mood_enabled": False}
+    app.pet = SimpleNamespace(is_walking=False, play=lambda *args, **kwargs: None)
+    app._reminder_choice_active = True
+    app._tab_review_prompt = False
+    app.tab_review = SimpleNamespace(active=False)
+    app._last_tickle_at = 0.0
+    app._show_message = lambda text: shown.append(text)
+
+    app._on_tickled()
+    app._reminder_choice_active = False
+    app.pet.is_walking = True
+    app._on_tickled()
+
+    assert shown == []
+
+
 def test_tab_review_prompt_abandons_pending_reminder_choice(monkeypatch):
     events = []
     app = DaisyApplication.__new__(DaisyApplication)

@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from daisy_pet.pet_window import PetWindow
-from daisy_pet.pet_window import FRAME_MS
+from daisy_pet.pet_window import FRAME_MS, RUB_MIN_STEP
 from daisy_pet.sprites import SpriteSheet
 
 
@@ -281,3 +281,65 @@ def test_dragging_is_ignored_while_walking(qapp, sheet):
     assert pet._press_global is None
 
     pet.stop_walk()
+
+
+def test_three_rub_reversals_emit_tickled_once(qapp, sheet, monkeypatch):
+    pet = PetWindow(sheet)
+    seen = []
+    pet.tickled.connect(lambda: seen.append(True))
+    monkeypatch.setattr("daisy_pet.pet_window.time.monotonic", lambda: 1.0)
+
+    for x in (0, 10, 0, 10, 0):
+        pet._track_rub(x)
+
+    assert seen == [True]
+    assert pet._rub_last_x is None
+    assert pet._rub_direction == 0
+    assert pet._rub_reversals == 0
+
+
+def test_one_direction_rubbing_never_tickles(qapp, sheet):
+    pet = PetWindow(sheet)
+    seen = []
+    pet.tickled.connect(lambda: seen.append(True))
+
+    for x in range(0, 40, 5):
+        pet._track_rub(x)
+
+    assert seen == []
+
+
+def test_drag_movement_does_not_track_rubbing(qapp, sheet):
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+
+    pet = PetWindow(sheet)
+    seen = []
+    pet.tickled.connect(lambda: seen.append(True))
+    pet._press_global = QPoint(0, 0)
+
+    for x in (0, 10, 0, 10, 0, 10, 0):
+        event = QMouseEvent(
+            QMouseEvent.Type.MouseMove,
+            QPointF(x, 5),
+            QPointF(x, 5),
+            QPointF(x, 5),
+            Qt.MouseButton.NoButton,
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+        )
+        pet.mouseMoveEvent(event)
+
+    assert seen == []
+    assert pet._rub_last_x is None
+
+
+def test_small_rub_jitter_never_tickles(qapp, sheet):
+    pet = PetWindow(sheet)
+    seen = []
+    pet.tickled.connect(lambda: seen.append(True))
+
+    for x in (0, RUB_MIN_STEP - 1, 0, RUB_MIN_STEP - 1, 0):
+        pet._track_rub(x)
+
+    assert seen == []
