@@ -1,6 +1,6 @@
 import json
 
-from daisy_pet.config import DEFAULTS, load, save
+from daisy_pet.config import DEFAULTS, config_path, load, memory_path, save
 
 
 def test_config_roundtrip(tmp_path):
@@ -281,3 +281,57 @@ def test_custom_reminders_old_shape_without_mode_is_still_valid(tmp_path):
     assert load(path)["custom_reminders"] == [
         {"id": "a1", "text": "Stretch", "interval_minutes": 20, "enabled": True}
     ]
+
+
+def test_memory_path_sits_beside_the_config_file():
+    assert memory_path().parent == config_path().parent
+    assert memory_path().name == "memory.sqlite3"
+
+
+def test_memory_and_summary_defaults_and_validation(tmp_path):
+    path = tmp_path / "config.json"
+    cfg = load(path)
+    assert cfg["memory_enabled"] is True
+    assert cfg["summary_enabled"] is True
+    assert cfg["summary_time"] == "18:00"
+    assert cfg["memory_retention_days"] == 30
+    path.write_text(
+        json.dumps(
+            {
+                "memory_enabled": "yes",
+                "summary_enabled": 1,
+                "summary_time": "25:00",
+                "memory_retention_days": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert load(path) == DEFAULTS
+    for bad in (0, 366, "30", 12.5):
+        path.write_text(
+            json.dumps({"memory_retention_days": bad}), encoding="utf-8"
+        )
+        assert load(path)["memory_retention_days"] == 30
+
+
+def test_memory_and_summary_roundtrip(tmp_path):
+    path = tmp_path / "config.json"
+    expected = {
+        **DEFAULTS,
+        "memory_enabled": False,
+        "summary_enabled": False,
+        "summary_time": "20:15",
+        "memory_retention_days": 7,
+    }
+    save(expected, path)
+    assert load(path) == expected
+
+
+def test_config_predating_memory_keys_gets_defaults(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"interval_minutes": 45}), encoding="utf-8")
+    cfg = load(path)
+    assert cfg["interval_minutes"] == 45
+    assert cfg["memory_enabled"] is True
+    assert cfg["summary_time"] == "18:00"
+    assert cfg["memory_retention_days"] == 30

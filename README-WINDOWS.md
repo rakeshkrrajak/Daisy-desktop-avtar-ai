@@ -54,7 +54,9 @@ icon (or a right-click on Daisy herself).
 The tray menu provides **Drink now**, **Snooze 10 minutes** (for the water
 reminder), a **Snooze a reminder** submenu (for your custom reminders — see
 below), an **Interval** submenu with 15, 30, 45, and 60 minutes,
-**Reminders enabled** to turn scheduled reminders on or off, and
+**Reminders enabled** to turn scheduled reminders on or off,
+**Today's summary** to hear Daisy's recap of your day right now,
+**Add a note...** to jot down a line she should remember, and
 **Daisy Settings...** to configure walking and active hours. **Quit** exits
 the app.
 
@@ -103,6 +105,12 @@ configure:
   so you can choose whether to keep it or close it.
 - **Lifelike idle behaviour** — let Daisy occasionally play a quiet,
   pose-only idle animation. Set the minimum and maximum delay between poses.
+- **Remember my day (local only)** — turn Daisy's local memory (app time,
+  hydration, tab decisions, notes) on or off.
+- **Bring me a daily summary** and **Summary at** — whether Daisy walks in
+  with a recap of your day, and the time she does it (18:00 by default).
+- **Keep memories for** — how long she keeps her local rows before pruning
+  them, 1 to 365 days (30 by default).
 
 Speech bubbles use a colourful cartoon balloon with a directional tail rather
 than a plain rectangle, and the tail flips when the balloon must appear below
@@ -155,8 +163,10 @@ name, local idle time, and the number of visible browser windows. She uses
 those signals to offer occasional comments when a meeting or message appears,
 you have many browser windows open, you have focused for 45 minutes, you return
 from a long idle period, or you have been sitting for 90 minutes. Checks run
-every 20 seconds and are entirely local: the information is never stored or
-sent anywhere. Turn off **Enable activity awareness** in **Daisy Settings** to
+every 20 seconds and are entirely local, and nothing is ever sent anywhere.
+With memory enabled, the foreground *process* name (like `code.exe`) is
+aggregated into per-day totals on disk; window titles are never written down.
+Turn off **Enable activity awareness** in **Daisy Settings** to
 disable these checks. Exact browser *tab* counts are not detected; Daisy only
 counts browser windows.
 
@@ -188,6 +198,38 @@ closes a browser tab herself and never sends a close keystroke; press
 choice until the next day. The keep list stores only a salted-free, truncated
 SHA-256 hash of the normalized title and the date. No plaintext browser titles
 are stored on disk.
+
+## Local memory and the daily summary
+
+With **Remember my day (local only)** enabled, Daisy keeps a small SQLite file next
+to her configuration, at `%APPDATA%\DenimDaisy\memory.sqlite3`. Nothing leaves
+the laptop: there is no cloud, no telemetry, and no account.
+
+What she stores:
+
+- per-day foreground seconds per process name (for example `code.exe`),
+  aggregated rather than one row per check;
+- hydration outcomes — acknowledged, snoozed, ignored;
+- stale-tab decisions — kept or closed — identified only by the same
+  truncated SHA-256 hash of the normalized title used by the keep list;
+- the notes you type yourself, with an optional due date.
+
+What she never stores: window titles, browser tab titles, URLs, keystrokes, or
+anything else in plaintext that came from a title. Rows older than **Keep
+memories for** are pruned when Daisy starts.
+
+**Today's summary** in the tray shows the recap on demand — something like
+`Today: 4h in VS Code · 1h in Teams · 5 of 8 sips · 3 tabs kept · 2 notes`.
+With **Bring me a daily summary** enabled she also walks in once a day at
+**Summary at** to say it herself, using the same gates as the water
+reminder: only while reminders are enabled and inside your active hours, and
+never on top of a pending water choice or a stale-tab walkthrough. The wording
+is generated offline; if Ollama is enabled it may rephrase the line, but the
+offline template is always the fallback.
+
+**Add a note...** opens a small box for one line — "call Manisha", "decided X
+with Bhavana" — up to 200 characters, with an optional due date. Notes are
+counted in the summary, and a note due today is read out in it.
 
 ## Lifelike idle behaviour
 

@@ -37,9 +37,14 @@ DEFAULTS = {
     "liveliness_min_seconds": 45,
     "liveliness_max_seconds": 150,
     "tab_review_enabled": True,
+    "memory_enabled": True,
+    "memory_retention_days": 30,
+    "summary_enabled": True,
+    "summary_time": "18:00",
 }
 
 MAX_CUSTOM_REMINDER_TEXT_LENGTH = 200
+MAX_NOTE_TEXT_LENGTH = 200
 
 
 def _valid_minutes(value: Any) -> bool:
@@ -94,6 +99,10 @@ def mood_state_path() -> Path:
     return config_path().with_name("mood_state.json")
 
 
+def memory_path() -> Path:
+    return config_path().with_name("memory.sqlite3")
+
+
 def _valid_value(key: str, value: Any) -> bool:
     if key in {"interval_minutes", "bubble_seconds"}:
         return isinstance(value, int) and not isinstance(value, bool) and value >= 1
@@ -131,6 +140,8 @@ def _valid_value(key: str, value: Any) -> bool:
         "tab_hints_enabled",
         "liveliness_enabled",
         "tab_review_enabled",
+        "memory_enabled",
+        "summary_enabled",
     }:
         return isinstance(value, bool)
     if key == "ollama_url":
@@ -155,7 +166,13 @@ def _valid_value(key: str, value: Any) -> bool:
             and not isinstance(value, bool)
             and 0.05 <= value <= 0.95
         )
-    if key in {"schedule_start", "schedule_end"}:
+    if key == "memory_retention_days":
+        return (
+            isinstance(value, int)
+            and not isinstance(value, bool)
+            and 1 <= value <= 365
+        )
+    if key in {"schedule_start", "schedule_end", "summary_time"}:
         return schedule.is_valid_time_string(value)
     if key == "custom_reminders":
         return _valid_custom_reminders(value)

@@ -1,6 +1,7 @@
 import random
 import re
 
+from .memory import DaySummary
 from .reminder import MESSAGES
 
 
@@ -66,6 +67,29 @@ TAB_REVIEW_DONE_LINES = (
     "All clear — Daisy will leave those tabs alone for now.",
     "Review complete. Your browser gets a little breathing room.",
 )
+APP_LABELS = {
+    "code.exe": "VS Code",
+    "devenv.exe": "Visual Studio",
+    "teams.exe": "Teams",
+    "ms-teams.exe": "Teams",
+    "outlook.exe": "Outlook",
+    "chrome.exe": "Chrome",
+    "msedge.exe": "Edge",
+    "firefox.exe": "Firefox",
+    "explorer.exe": "File Explorer",
+    "winword.exe": "Word",
+    "excel.exe": "Excel",
+    "powerpnt.exe": "PowerPoint",
+    "windowsterminal.exe": "Terminal",
+    "powershell.exe": "PowerShell",
+    "slack.exe": "Slack",
+}
+EMPTY_SUMMARY_LINES = (
+    "Nothing on today's page yet — Daisy just kept you company.",
+    "Today is still a blank page. Daisy was watching quietly.",
+)
+SUMMARY_APP_LIMIT = 3
+SUMMARY_DUE_LIMIT = 2
 IDLE_CHATTER = (
     "Just keeping you company.",
     "A tiny Daisy check-in.",
@@ -164,3 +188,56 @@ def tab_review_done_line(rng: random.Random | None = None) -> str:
 def idle_chatter(rng: random.Random | None = None) -> str:
     chooser = rng or random
     return chooser.choice(IDLE_CHATTER)
+
+
+def app_label(process: str) -> str:
+    key = process.strip().lower()
+    if key in APP_LABELS:
+        return APP_LABELS[key]
+    stem = key.removesuffix(".exe")
+    return stem.replace("_", " ").replace("-", " ").title() or "something"
+
+
+def _time_spent(seconds: int) -> str:
+    minutes = max(0, int(seconds)) // 60
+    if minutes < 60:
+        return f"{minutes} min"
+    hours, rest = divmod(minutes, 60)
+    return f"{hours}h" if rest < 6 else f"{hours}h{rest:02d}"
+
+
+def _plural(count: int, noun: str) -> str:
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
+def _short_text(text: str) -> str:
+    cleaned = re.sub(r"\s+", " ", text).strip()
+    return f"{cleaned[:39]}…" if len(cleaned) > 40 else cleaned
+
+
+def day_summary_line(
+    summary: DaySummary, rng: random.Random | None = None
+) -> str:
+    chooser = rng or random
+    if summary.empty:
+        return chooser.choice(EMPTY_SUMMARY_LINES)
+    parts = [
+        f"{_time_spent(seconds)} in {app_label(process)}"
+        for process, seconds in summary.app_seconds[:SUMMARY_APP_LIMIT]
+        if seconds >= 60
+    ]
+    if summary.sips_offered:
+        parts.append(f"{summary.sips_acknowledged} of {summary.sips_offered} sips")
+    if summary.tabs_kept:
+        parts.append(f"{_plural(summary.tabs_kept, 'tab')} kept")
+    if summary.tabs_closed:
+        parts.append(f"{_plural(summary.tabs_closed, 'tab')} closed")
+    if summary.notes:
+        parts.append(_plural(len(summary.notes), "note"))
+    line = f"Today: {' · '.join(parts)}" if parts else "Today: a quiet one so far"
+    if summary.notes_due:
+        due = "; ".join(
+            _short_text(note.text) for note in summary.notes_due[:SUMMARY_DUE_LIMIT]
+        )
+        line = f"{line} — due today: {due}"
+    return line if len(line) <= 220 else f"{line[:219]}…"

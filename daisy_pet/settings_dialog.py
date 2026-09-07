@@ -1,7 +1,8 @@
-from PySide6.QtCore import QTime, Qt
+from PySide6.QtCore import QDate, QTime, Qt
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
+    QDateEdit,
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
@@ -18,7 +19,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from .config import MAX_CUSTOM_REMINDER_TEXT_LENGTH
+from .config import MAX_CUSTOM_REMINDER_TEXT_LENGTH, MAX_NOTE_TEXT_LENGTH
 from .custom_reminders import (
     DEFAULT_SNOOZE_MINUTES,
     MODE_INTERVAL,
@@ -117,6 +118,53 @@ class AddCustomReminderDialog(QDialog):
         return data
 
 
+class AddNoteDialog(QDialog):
+    """Small popup for jotting a note into Daisy's local memory, with an
+    optional due date so she can bring it up on the day.
+    """
+
+    def __init__(self, parent: QDialog | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Note for Daisy")
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+
+        self.text_input = QLineEdit()
+        self.text_input.setPlaceholderText("e.g. call Manisha, decided X with Bhavana")
+        self.text_input.setMaxLength(MAX_NOTE_TEXT_LENGTH)
+
+        self.due_enabled = QCheckBox("Remind me on")
+        self.due_date = QDateEdit()
+        self.due_date.setDisplayFormat("yyyy-MM-dd")
+        self.due_date.setCalendarPopup(True)
+        self.due_date.setDate(QDate.currentDate())
+        self.due_date.setEnabled(False)
+        self.due_enabled.toggled.connect(self.due_date.setEnabled)
+
+        form = QFormLayout()
+        form.addRow("Note", self.text_input)
+        form.addRow(self.due_enabled, self.due_date)
+
+        self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttons.accepted.connect(self._on_accept)
+        self.buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addWidget(self.buttons)
+
+    def _on_accept(self) -> None:
+        if self.text_input.text().strip():
+            self.accept()
+
+    def note_text(self) -> str:
+        return self.text_input.text().strip()
+
+    def due_date_string(self) -> str | None:
+        if not self.due_enabled.isChecked():
+            return None
+        return self.due_date.date().toString("yyyy-MM-dd")
+
+
 class SettingsDialog(QDialog):
     def __init__(self, cfg: dict, parent: QDialog | None = None) -> None:
         super().__init__(parent)
@@ -205,6 +253,17 @@ class SettingsDialog(QDialog):
         self.liveliness_max_seconds.setRange(10, 3600)
         self.liveliness_max_seconds.setSuffix(" sec")
         self.liveliness_max_seconds.setValue(cfg["liveliness_max_seconds"])
+        self.memory_enabled = QCheckBox("Remember my day (local only)")
+        self.memory_enabled.setChecked(cfg["memory_enabled"])
+        self.summary_enabled = QCheckBox("Bring me a daily summary")
+        self.summary_enabled.setChecked(cfg["summary_enabled"])
+        self.summary_time = QTimeEdit()
+        self.summary_time.setDisplayFormat("HH:mm")
+        self.summary_time.setTime(_to_qtime(cfg["summary_time"]))
+        self.memory_retention_days = QSpinBox()
+        self.memory_retention_days.setRange(1, 365)
+        self.memory_retention_days.setSuffix(" days")
+        self.memory_retention_days.setValue(cfg["memory_retention_days"])
 
         form = QFormLayout()
         form.addRow("Remind me to drink every", self.interval_minutes)
@@ -230,6 +289,10 @@ class SettingsDialog(QDialog):
         form.addRow(self.liveliness_enabled)
         form.addRow("Idle pose at least every", self.liveliness_min_seconds)
         form.addRow("Idle pose at most every", self.liveliness_max_seconds)
+        form.addRow(self.memory_enabled)
+        form.addRow(self.summary_enabled)
+        form.addRow("Summary at", self.summary_time)
+        form.addRow("Keep memories for", self.memory_retention_days)
 
         self.custom_list = QListWidget()
         for item in cfg["custom_reminders"]:
@@ -314,4 +377,8 @@ class SettingsDialog(QDialog):
                 self.liveliness_min_seconds.value(),
                 self.liveliness_max_seconds.value(),
             ),
+            "memory_enabled": self.memory_enabled.isChecked(),
+            "summary_enabled": self.summary_enabled.isChecked(),
+            "summary_time": self.summary_time.time().toString("HH:mm"),
+            "memory_retention_days": self.memory_retention_days.value(),
         }

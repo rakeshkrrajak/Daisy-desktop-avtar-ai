@@ -13,6 +13,8 @@ def _make_tray(qapp, **overrides):
         set_enabled=lambda enabled: None,
         quit_app=lambda: None,
         open_settings=lambda: None,
+        show_summary=lambda: None,
+        add_note=lambda: None,
         interval=30,
         enabled=True,
     )

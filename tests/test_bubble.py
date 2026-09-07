@@ -111,3 +111,9 @@ def test_choice_bubble_replaces_buttons_and_wraps_long_text(qapp):
         "Next",
     ]
     assert bubble._label.height() >= bubble._label.heightForWidth(236)
+
+
+def test_bubble_is_a_tooltip_window_so_it_shows_while_daisy_is_inactive(qapp):
+    bubble = SpeechBubble()
+
+    assert bubble.windowFlags() & Qt.WindowType_Mask == Qt.ToolTip

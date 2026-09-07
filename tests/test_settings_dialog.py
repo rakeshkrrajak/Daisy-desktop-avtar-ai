@@ -2,7 +2,11 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog
 
 from daisy_pet.config import DEFAULTS
-from daisy_pet.settings_dialog import AddCustomReminderDialog, SettingsDialog
+from daisy_pet.settings_dialog import (
+    AddCustomReminderDialog,
+    AddNoteDialog,
+    SettingsDialog,
+)
 
 
 def test_dialog_reflects_current_config(qapp):
@@ -31,6 +35,10 @@ def test_dialog_reflects_current_config(qapp):
         "liveliness_enabled": True,
         "liveliness_min_seconds": 45,
         "liveliness_max_seconds": 150,
+        "memory_enabled": True,
+        "summary_enabled": True,
+        "summary_time": "18:00",
+        "memory_retention_days": 30,
         "scale": 1.5,
     }
     dialog = SettingsDialog(cfg)
@@ -45,6 +53,7 @@ def test_dialog_reflects_current_config(qapp):
     dialog.liveliness_enabled.setChecked(False)
     dialog.liveliness_min_seconds.setValue(30)
     dialog.liveliness_max_seconds.setValue(120)
+    dialog.memory_retention_days.setValue(14)
     assert dialog.values() == {
         "interval_minutes": 5,
         "reminder_wait_seconds": 240,
@@ -70,6 +79,10 @@ def test_dialog_reflects_current_config(qapp):
         "liveliness_enabled": False,
         "liveliness_min_seconds": 30,
         "liveliness_max_seconds": 120,
+        "memory_enabled": True,
+        "summary_enabled": True,
+        "summary_time": "18:00",
+        "memory_retention_days": 14,
     }
 
 
@@ -169,6 +182,51 @@ def test_unchecking_custom_reminder_item_disables_it(qapp):
     item = dialog.custom_list.item(0)
     item.setCheckState(Qt.Unchecked)
     assert dialog.values()["custom_reminders"][0]["enabled"] is False
+
+
+def test_memory_controls_reflect_config_and_values(qapp):
+    cfg = {
+        **DEFAULTS,
+        "memory_enabled": False,
+        "summary_enabled": False,
+        "summary_time": "20:30",
+        "memory_retention_days": 7,
+    }
+    dialog = SettingsDialog(cfg)
+    assert not dialog.memory_enabled.isChecked()
+    assert not dialog.summary_enabled.isChecked()
+    assert dialog.summary_time.time().toString("HH:mm") == "20:30"
+    assert dialog.memory_retention_days.value() == 7
+
+    dialog.memory_enabled.setChecked(True)
+    dialog.summary_enabled.setChecked(True)
+    values = dialog.values()
+    assert values["memory_enabled"] is True
+    assert values["summary_enabled"] is True
+    assert values["summary_time"] == "20:30"
+    assert values["memory_retention_days"] == 7
+
+
+def test_note_dialog_returns_text_and_optional_due_date(qapp):
+    from PySide6.QtCore import QDate
+
+    dialog = AddNoteDialog()
+    dialog.text_input.setText("  call Manisha  ")
+    assert dialog.note_text() == "call Manisha"
+    assert dialog.due_date_string() is None
+    assert not dialog.due_date.isEnabled()
+
+    dialog.due_enabled.setChecked(True)
+    dialog.due_date.setDate(QDate(2026, 3, 4))
+    assert dialog.due_date.isEnabled()
+    assert dialog.due_date_string() == "2026-03-04"
+
+
+def test_note_dialog_rejects_blank_text(qapp):
+    dialog = AddNoteDialog()
+    dialog.text_input.setText("   ")
+    dialog._on_accept()
+    assert dialog.result() != QDialog.Accepted
 
 
 def test_add_dialog_rejects_blank_text(qapp):

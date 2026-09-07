@@ -16,6 +16,8 @@ class DaisyTray:
         set_enabled: Callable[[bool], None],
         quit_app: Callable[[], None],
         open_settings: Callable[[], None],
+        show_summary: Callable[[], None],
+        add_note: Callable[[], None],
         interval: int,
         enabled: bool,
     ) -> None:
@@ -50,6 +52,11 @@ class DaisyTray:
         enabled_action.setCheckable(True)
         enabled_action.setChecked(enabled)
         enabled_action.toggled.connect(set_enabled)
+        menu.addSeparator()
+        summary_action = menu.addAction("Today's summary")
+        summary_action.triggered.connect(lambda: show_summary())
+        note_action = menu.addAction("Add a note...")
+        note_action.triggered.connect(lambda: add_note())
         menu.addSeparator()
         settings_action = menu.addAction("Daisy Settings...")
         settings_action.triggered.connect(lambda: open_settings())
