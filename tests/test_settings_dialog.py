@@ -1,4 +1,5 @@
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QDialog
 
 from daisy_pet.config import DEFAULTS
@@ -234,3 +235,23 @@ def test_add_dialog_rejects_blank_text(qapp):
     add_dialog.text_input.setText("   ")
     add_dialog._on_accept()
     assert add_dialog.result() != QDialog.Accepted
+
+
+def test_dialog_fits_on_screen_with_the_buttons_reachable(qapp):
+    dialog = SettingsDialog({**DEFAULTS})
+
+    available = QGuiApplication.primaryScreen().availableGeometry()
+    assert dialog.sizeHint().height() <= available.height()
+    assert dialog.tabs.count() == 6
+
+
+def test_disabled_features_grey_out_their_own_knobs(qapp):
+    dialog = SettingsDialog({**DEFAULTS, "memory_enabled": False})
+
+    assert not dialog.summary_time.isEnabled()
+    assert not dialog.memory_retention_days.isEnabled()
+
+    dialog.memory_enabled.setChecked(True)
+
+    assert dialog.summary_time.isEnabled()
+    assert dialog.memory_retention_days.isEnabled()

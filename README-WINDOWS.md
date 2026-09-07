@@ -62,27 +62,56 @@ the app.
 
 ### Daisy Settings
 
-Opened from the tray menu (or by right-clicking Daisy), this dialog lets you
-configure:
+Opened from the tray menu (or by right-clicking Daisy), this dialog groups
+its settings into tabs — **Water**, **Daisy**, **My desk**, **Memory**,
+**Reminders** and **Advanced** — so **OK** and **Cancel** stay in reach on
+any screen, and a knob is greyed out while the feature that owns it is
+switched off.
+
+**Water**
 
 - **Remind me to drink every** — the reminder interval in minutes, any value
   from 1 to 240 (for example, 5 minutes for quick testing).
-- **Wait for my answer (seconds)** — how long Daisy waits at the drink point
+- **Wait for my answer** — how long Daisy waits at the drink point
   for **I drank it** or **Snooze 5 min** before treating the reminder as
   ignored.
+- **Enable mood expressions** — let her tone and pose follow how you have
+  been answering.
+- **Restrict Daisy to active hours** — with a start/end time, Daisy (and her
+  reminders) are hidden outside that window. Supports overnight ranges
+  (e.g. 22:00 to 06:00).
+
+**Daisy**
+
 - **Daisy size** — choose a scale from 0.5× to 3.0×. Daisy resizes
   immediately when you accept the settings.
 - **Enable walking animations** — turn the reminder walk-in/out and ambient
   wandering on or off. If turned off, reminders just wave in place instead.
-- **Act like drinking at** — how far across the screen (as a percentage of
-  the full right-to-left crossing) Daisy walks before she stops to act out
-  the reminder. 40% by default.
 - **Wander every (min/max minutes)** — how often Daisy ambiently strolls
   across the screen between reminders, just for fun.
-- **Seconds to cross the screen** — how fast she walks.
-- **Restrict Daisy to active hours** — with a start/end time, Daisy (and her
-  reminders) are hidden outside that window. Supports overnight ranges
-  (e.g. 22:00 to 06:00).
+- **Enable lifelike idle behaviour** — let her occasionally play a quiet,
+  pose-only idle animation.
+
+**My desk**
+
+- **Enable activity awareness** — allow Daisy to notice local
+  foreground-window activity and offer occasional comments.
+- **Suggest closing stale browser tabs**, **Stale tab age** and
+  **Minimum browser windows** — when she should bring up old tabs.
+- **Walk me through stale tabs** — let Daisy guide you through each stale tab
+  so you can choose whether to keep it or close it.
+
+**Memory**
+
+- **Remember my day (local only)** — turn Daisy's local memory (app time,
+  hydration, tab decisions, notes) on or off.
+- **Bring me a daily summary** and **Summary at** — whether Daisy walks in
+  with a recap of your day, and the time she does it (18:00 by default).
+- **Keep memories for** — how long she keeps her local rows before pruning
+  them, 1 to 365 days (30 by default).
+
+**Reminders**
+
 - **Custom reminders** — a list where you can **Add...** your own reminders
   (any text, like "Stretch", "Stand up", "Eat lunch"). Each one fires either:
   - **Repeat every** N minutes (like the water reminder), or
@@ -97,20 +126,12 @@ configure:
   walk-in cinematic as the water reminder (waving instead of drinking) and
   never overlap with it or each other — only one reminder plays out at a
   time, and others just wait their turn.
-- **Activity awareness** — allow Daisy to notice local foreground-window
-  activity and offer occasional comments.
-- **Stale browser-tab hints** — set the minimum age and browser-window count
-  before Daisy suggests closing old tabs.
-- **Walk me through stale tabs** — let Daisy guide you through each stale tab
-  so you can choose whether to keep it or close it.
-- **Lifelike idle behaviour** — let Daisy occasionally play a quiet,
-  pose-only idle animation. Set the minimum and maximum delay between poses.
-- **Remember my day (local only)** — turn Daisy's local memory (app time,
-  hydration, tab decisions, notes) on or off.
-- **Bring me a daily summary** and **Summary at** — whether Daisy walks in
-  with a recap of your day, and the time she does it (18:00 by default).
-- **Keep memories for** — how long she keeps her local rows before pruning
-  them, 1 to 365 days (30 by default).
+
+**Advanced** — the fine-tuning most people never touch: **Act like drinking
+at** (how far across the screen she walks before acting out a reminder, 40%
+by default), **Seconds to cross the screen**, the minimum and maximum delay
+between idle poses, and the optional local Ollama lines with their URL and
+model.
 
 Speech bubbles use a colourful cartoon balloon with a directional tail rather
 than a plain rectangle, and the tail flips when the balloon must appear below

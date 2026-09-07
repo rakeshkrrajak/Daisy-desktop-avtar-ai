@@ -1,4 +1,5 @@
 from PySide6.QtCore import QDate, QTime, Qt
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -14,9 +15,12 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QPushButton,
     QRadioButton,
+    QScrollArea,
     QSpinBox,
+    QTabWidget,
     QTimeEdit,
     QVBoxLayout,
+    QWidget,
 )
 
 from .config import MAX_CUSTOM_REMINDER_TEXT_LENGTH, MAX_NOTE_TEXT_LENGTH
@@ -31,6 +35,16 @@ from .custom_reminders import (
 def _to_qtime(value: str) -> QTime:
     hours, minutes = value.split(":")
     return QTime(int(hours), int(minutes))
+
+
+def _page(form: QFormLayout) -> QWidget:
+    page = QWidget()
+    page.setLayout(form)
+    area = QScrollArea()
+    area.setWidgetResizable(True)
+    area.setFrameShape(QScrollArea.NoFrame)
+    area.setWidget(page)
+    return area
 
 
 def _summary_text(data: dict) -> str:
@@ -265,35 +279,6 @@ class SettingsDialog(QDialog):
         self.memory_retention_days.setSuffix(" days")
         self.memory_retention_days.setValue(cfg["memory_retention_days"])
 
-        form = QFormLayout()
-        form.addRow("Remind me to drink every", self.interval_minutes)
-        form.addRow("Wait for my answer (seconds)", self.reminder_wait_seconds)
-        form.addRow("Daisy size", self.scale)
-        form.addRow(self.walk_enabled)
-        form.addRow("Act like drinking at", self.drink_fraction_percent)
-        form.addRow("Wander every, at least", self.ambient_min)
-        form.addRow("Wander every, at most", self.ambient_max)
-        form.addRow("Seconds to cross the screen", self.crossing_seconds)
-        form.addRow(self.schedule_enabled)
-        form.addRow("Active from", self.schedule_start)
-        form.addRow("Active until", self.schedule_end)
-        form.addRow(self.mood_enabled)
-        form.addRow(self.ollama_enabled)
-        form.addRow("Ollama URL", self.ollama_url)
-        form.addRow("Ollama model", self.ollama_model)
-        form.addRow(self.activity_enabled)
-        form.addRow(self.tab_hints_enabled)
-        form.addRow(self.tab_review_enabled)
-        form.addRow("Stale tab age", self.tab_idle_minutes)
-        form.addRow("Minimum browser windows", self.tab_min_open)
-        form.addRow(self.liveliness_enabled)
-        form.addRow("Idle pose at least every", self.liveliness_min_seconds)
-        form.addRow("Idle pose at most every", self.liveliness_max_seconds)
-        form.addRow(self.memory_enabled)
-        form.addRow(self.summary_enabled)
-        form.addRow("Summary at", self.summary_time)
-        form.addRow("Keep memories for", self.memory_retention_days)
-
         self.custom_list = QListWidget()
         for item in cfg["custom_reminders"]:
             self._add_list_item(item)
@@ -308,6 +293,58 @@ class SettingsDialog(QDialog):
         custom_buttons.addWidget(remove_button)
         custom_buttons.addStretch(1)
 
+        water = QFormLayout()
+        water.addRow("Remind me to drink every", self.interval_minutes)
+        water.addRow("Wait for my answer", self.reminder_wait_seconds)
+        water.addRow(self.mood_enabled)
+        water.addRow(self.schedule_enabled)
+        water.addRow("Active from", self.schedule_start)
+        water.addRow("Active until", self.schedule_end)
+
+        daisy = QFormLayout()
+        daisy.addRow("Daisy size", self.scale)
+        daisy.addRow(self.walk_enabled)
+        daisy.addRow("Wander every, at least", self.ambient_min)
+        daisy.addRow("Wander every, at most", self.ambient_max)
+        daisy.addRow(self.liveliness_enabled)
+
+        desk = QFormLayout()
+        desk.addRow(self.activity_enabled)
+        desk.addRow(self.tab_hints_enabled)
+        desk.addRow(self.tab_review_enabled)
+        desk.addRow("Stale tab age", self.tab_idle_minutes)
+        desk.addRow("Minimum browser windows", self.tab_min_open)
+
+        remembering = QFormLayout()
+        remembering.addRow(self.memory_enabled)
+        remembering.addRow(self.summary_enabled)
+        remembering.addRow("Summary at", self.summary_time)
+        remembering.addRow("Keep memories for", self.memory_retention_days)
+
+        reminders = QVBoxLayout()
+        reminders.addWidget(QLabel("Custom reminders (checked = enabled)"))
+        reminders.addWidget(self.custom_list)
+        reminders.addLayout(custom_buttons)
+        reminders_page = QWidget()
+        reminders_page.setLayout(reminders)
+
+        advanced = QFormLayout()
+        advanced.addRow("Act like drinking at", self.drink_fraction_percent)
+        advanced.addRow("Seconds to cross the screen", self.crossing_seconds)
+        advanced.addRow("Idle pose at least every", self.liveliness_min_seconds)
+        advanced.addRow("Idle pose at most every", self.liveliness_max_seconds)
+        advanced.addRow(self.ollama_enabled)
+        advanced.addRow("Ollama URL", self.ollama_url)
+        advanced.addRow("Ollama model", self.ollama_model)
+
+        self.tabs = QTabWidget()
+        self.tabs.addTab(_page(water), "Water")
+        self.tabs.addTab(_page(daisy), "Daisy")
+        self.tabs.addTab(_page(desk), "My desk")
+        self.tabs.addTab(_page(remembering), "Memory")
+        self.tabs.addTab(reminders_page, "Reminders")
+        self.tabs.addTab(_page(advanced), "Advanced")
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         )
@@ -315,11 +352,47 @@ class SettingsDialog(QDialog):
         buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
-        layout.addLayout(form)
-        layout.addWidget(QLabel("Custom reminders (checked = enabled)"))
-        layout.addWidget(self.custom_list)
-        layout.addLayout(custom_buttons)
+        layout.addWidget(self.tabs)
         layout.addWidget(buttons)
+
+        for switch, dependants in (
+            (self.schedule_enabled, (self.schedule_start, self.schedule_end)),
+            (self.walk_enabled, (self.ambient_min, self.ambient_max)),
+            (
+                self.tab_review_enabled,
+                (self.tab_idle_minutes, self.tab_min_open),
+            ),
+            (
+                self.memory_enabled,
+                (
+                    self.summary_enabled,
+                    self.summary_time,
+                    self.memory_retention_days,
+                ),
+            ),
+            (self.ollama_enabled, (self.ollama_url, self.ollama_model)),
+        ):
+            self._follow(switch, dependants)
+
+        available = QGuiApplication.primaryScreen().availableGeometry()
+        self.setMinimumWidth(min(520, available.width()))
+        self.setMaximumHeight(int(available.height() * 0.9))
+        self.resize(
+            max(self.sizeHint().width(), self.minimumWidth()),
+            min(self.sizeHint().height(), self.maximumHeight()),
+        )
+
+    def _follow(self, switch: QCheckBox, dependants) -> None:
+        """Grey out the knobs a switch owns, so a disabled feature cannot be
+        tuned and the tab stays readable.
+        """
+
+        def apply(on: bool) -> None:
+            for widget in dependants:
+                widget.setEnabled(on)
+
+        switch.toggled.connect(apply)
+        apply(switch.isChecked())
 
     def _add_list_item(self, data: dict) -> None:
         item = QListWidgetItem(_summary_text(data))
