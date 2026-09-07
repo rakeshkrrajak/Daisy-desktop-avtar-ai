@@ -19,6 +19,7 @@ SIP_TILT_STEP_DEGREES = 4
 DEFAULT_FRAME_MS = 100
 FRAME_MS: dict[str, int] = {"drinking": 450}
 SINGLE_FRAME_HOLD_MS = 1500
+FOOT_PADDING = 7
 RUB_REVERSALS = 3
 RUB_WINDOW_SECONDS = 1.5
 RUB_MIN_STEP = 3
@@ -89,6 +90,10 @@ class PetWindow(QWidget):
     def is_walking(self) -> bool:
         return self._walk_timer.isActive()
 
+    @property
+    def foot_padding(self) -> int:
+        return round(FOOT_PADDING * self.sprites.scale)
+
     def rescale(self, scale: float) -> None:
         self.sprites.rescale(scale)
         self._frames = self.sprites.frames(self._state)
@@ -139,24 +144,17 @@ class PetWindow(QWidget):
         self.update()
 
     def place_initial(self, position: list[int] | None) -> None:
-        candidate = QPoint(*position) if position is not None else None
-        screens = QGuiApplication.screens()
-        if candidate is not None and any(
-            screen.availableGeometry().intersects(
-                QRect(candidate, self.size())
-            )
-            for screen in screens
-        ):
-            self.move(self.clamp_position(candidate))
-            return
+        self.place_right_corner()
+
+    def place_right_corner(self) -> None:
         screen = QGuiApplication.primaryScreen()
         if screen is None:
             self.move(40, 40)
             return
         area = screen.availableGeometry()
         self.move(
-            area.right() - self.width() - 40,
-            area.bottom() - self.height() - 40,
+            area.right() + 1 - self.width(),
+            area.bottom() + 1 - self.height() + self.foot_padding,
         )
 
     def clamp_position(self, position: QPoint) -> QPoint:
@@ -173,7 +171,10 @@ class PetWindow(QWidget):
             return position
         area = screen.availableGeometry()
         max_x = max(area.left(), area.right() - self.width() + 1)
-        max_y = max(area.top(), area.bottom() - self.height() + 1)
+        max_y = max(
+            area.top(),
+            area.bottom() + 1 - self.height() + self.foot_padding,
+        )
         return QPoint(
             min(max(position.x(), area.left()), max_x),
             min(max(position.y(), area.top()), max_y),

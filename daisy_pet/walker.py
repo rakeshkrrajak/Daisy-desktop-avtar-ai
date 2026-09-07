@@ -31,7 +31,7 @@ class Walker:
 
     def baseline_y(self, area: QRect | None = None) -> int:
         area = area or self.screen_area()
-        return area.bottom() - self.pet.height()
+        return area.bottom() + 1 - self.pet.height() + self.pet.foot_padding
 
     def speed_for(self, crossing_seconds: float, area: QRect | None = None) -> float:
         area = area or self.screen_area()
@@ -46,10 +46,13 @@ class Walker:
             return False
         area = self.screen_area()
         min_x = area.left()
-        max_x = area.right() - self.pet.width()
-        if max_x <= min_x:
+        left_max_x = self.pet.x() - self.pet.width()
+        if left_max_x < min_x:
+            self.pet.place_right_corner()
+            left_max_x = self.pet.x() - self.pet.width()
+        if left_max_x < min_x:
             return False
-        target_x = self.rng.randint(min_x, max_x)
+        target_x = self.rng.randint(min_x, left_max_x)
         if abs(target_x - self.pet.x()) < self.pet.width():
             return False
 
@@ -92,15 +95,10 @@ class Walker:
         self,
         crossing_seconds: float,
         on_exited: Callable[[], None],
-        to_right: bool = False,
     ) -> None:
         """Continue walking off-screen after the drink pause, then vanish."""
         area = self.screen_area()
-        exit_x = (
-            area.right() + ENTRY_MARGIN
-            if to_right
-            else area.left() - ENTRY_MARGIN
-        )
+        exit_x = area.left() - ENTRY_MARGIN
 
         def finished() -> None:
             self.busy = False
